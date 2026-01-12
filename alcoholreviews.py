@@ -4,10 +4,10 @@ import pandas as pd
 import plotly.express as px
 import re
 
-# 设置页面配置：宽屏模式，方便查看看板
-st.set_page_config(page_title="酒精笔评论闭环分析-精准销量版", layout="wide")
+# --- 1. 页面配置 ---
+st.set_page_config(page_title="酒精笔 VOC 精准分析看板", layout="wide")
 
-# --- 1. FEATURE_KEYWORDS 情感词库 ---
+# --- 2. FEATURE_KEYWORDS 情感词库 ---
 FEATURE_KEYWORDS = {
      '颜色种类': {
             '正面-色彩丰富': ['many colors', 'lot of colors', 'plenty of colors', 'good range', 'great variety', 'great selection', 'every color', 'all the colors', 'so many options'],
@@ -336,111 +336,82 @@ FEATURE_KEYWORDS = {
             }
         }
 
-# --- 2. 核心逻辑函数 ---
-def analyze_closed_loop_with_lexicon(df, keywords):
-    # 自动识别列名（不区分大小写，自动去空格）
-    df.columns = df.columns.str.strip()
-    cols = {c.lower(): c for c in df.columns}
+# --- 3. 分析逻辑函数 (解决 0 匹配的关键) ---
+def analyze_review_sentiment(text, dictionary):
+    if pd.isna(text):
+        return []
     
-    title_col = cols.get('title', 'Title')
-    review_col = cols.get('review content', 'Review Content')
-    sales_col = cols.get('average monthly sales', 'Average Monthly sales')
-    asin_col = cols.get('asin', 'ASIN') # 必须获取 ASIN 列用于去重
-
-    # 构建正则搜索网
-    all_pos = [p for cat in FEATURE_KEYWORDS.values() for p in cat.get('正面', [])]
-    all_neg = [p for cat in FEATURE_KEYWORDS.values() for p in cat.get('负面', [])]
-    pos_regex = re.compile(r'\b(' + '|'.join(map(re.escape, all_pos)) + r')\b', re.IGNORECASE)
-    neg_regex = re.compile(r'\b(' + '|'.join(map(re.escape, all_neg)) + r')\b', re.IGNORECASE)
-
-    results = []
-    for kw in keywords:
-        # 筛选标题中包含关键词的产品
-        mask = df[title_col].str.contains(kw, case=False, na=False)
-        sub_df = df[mask].copy()
-        if sub_df.empty: continue
-
-        # --- 精准销量计算逻辑（去重） ---
-        if asin_col in sub_df.columns:
-            # 每个 ASIN 只取一行数据来计算销量
-            unique_products = sub_df.drop_duplicates(subset=[asin_col])
-            sales_sum = pd.to_numeric(unique_products[sales_col], errors='coerce').sum()
-        else:
-            # 如果没找到 ASIN 列，回退到原始计算（会有重复风险）
-            sales_sum = pd.to_numeric(sub_df[sales_col], errors='coerce').sum()
-        
-        # --- 提及率与情感分析（依然使用全部评论样本） ---
-        total_reviews = len(sub_df)
-        mention_mask = sub_df[review_col].str.contains(kw, case=False, na=False)
-        mention_count = mention_mask.sum()
-        mention_rate = (mention_count / total_reviews) * 100 if total_reviews > 0 else 0
-
-        relevant_reviews = sub_df[mention_mask][review_col].astype(str)
-        pos_hits = relevant_reviews.apply(lambda x: len(pos_regex.findall(x))).sum()
-        neg_hits = relevant_reviews.apply(lambda x: len(neg_regex.findall(x))).sum()
-        sentiment_score = (pos_hits - neg_hits) / (pos_hits + neg_hits + 1e-6)
-
-        results.append({
-            "关键词": kw,
-            "心智提及率(%)": round(mention_rate, 2),
-            "情感正向指数": round(sentiment_score, 3),
-            "关联产品月销量": int(sales_sum),
-            "唯一产品数(ASIN)": sub_df[asin_col].nunique() if asin_col in sub_df.columns else "未知",
-            "样本评论量": total_reviews,
-            "正面反馈数": pos_hits,
-            "负面反馈数": neg_hits
-        })
+    text = str(text).lower()  # 统一转小写进行匹配
+    matches = []
     
-    return pd.DataFrame(results)
+    for category, sub_dict in dictionary.items():
+        for label, keywords in sub_dict.items():
+            for kw in keywords:
+                # 核心改变：使用 \b 单词边界匹配，并处理特殊字符
+                pattern = r'\b' + re.escape(kw.lower()) + r'\b'
+                if re.search(pattern, text):
+                    score = 0
+                    if '正面' in label: score = 1
+                    elif '负面' in label: score = -1
+                    
+                    matches.append({
+                        "维度": category,
+                        "标签": label,
+                        "得分": score,
+                        "命中词": kw
+                    })
+    return matches
 
-# --- 3. Streamlit UI 布局 ---
-st.title("🖌️ 酒精笔卖点闭环反馈分析系统 (精准去重版)")
+# --- 4. Streamlit UI 界面 ---
+st.header("🎨 酒精马克笔用户评论自动化分析")
+st.write("将复杂的非结构化评论转化为可量化的维度得分。")
 
-st.sidebar.header("1. 数据上传")
-uploaded_file = st.sidebar.file_uploader("上传评论数据 (CSV 或 XLSX)", type=["csv", "xlsx"])
+uploaded_file = st.file_uploader("第一步：上传您的数据文件 (Excel/CSV)", type=["xlsx", "csv"])
 
 if uploaded_file:
-    # 加载数据
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    # 读取数据
+    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+    review_col = st.selectbox("第二步：选择评论内容所在的列", df.columns)
     
-    st.sidebar.header("2. 分析设置")
-    # 默认分析的关键词
-    default_kws = ['Brush Tip', 'Colors', 'Alcohol', 'Refillable', 'Dual Tip', 'Bleed', 'Blend']
-    selected_kws = st.sidebar.multiselect("选择或输入要分析的标题关键词", default_kws, default=default_kws)
-
-    if selected_kws:
-        res_df = analyze_closed_loop_with_lexicon(df, selected_kws)
-
-        if not res_df.empty:
-            # 展示核心图表
-            st.subheader("🔄 卖点闭环归因图谱 (气泡大小=去重后月销量总额)")
+    if st.button("开始深度分析"):
+        with st.spinner('正在分析中...'):
+            all_results = []
+            for i, row in df.iterrows():
+                findings = analyze_review_sentiment(row[review_col], FEATURE_KEYWORDS)
+                for f in findings:
+                    f['Row_Index'] = i
+                    all_results.append(f)
             
-            fig = px.scatter(res_df,
-                             x="心智提及率(%)",
-                             y="情感正向指数",
-                             size="关联产品月销量",
-                             color="关键词",
-                             text="关键词",
-                             hover_data=["唯一产品数(ASIN)", "样本评论量", "正面反馈数", "负面反馈数"],
-                             range_y=[-1.1, 1.1])
-
-            # 辅助线
-            fig.add_hline(y=0, line_dash="solid", line_color="black")
-            avg_mention = res_df['心智提及率(%)'].mean()
-            fig.add_vline(x=avg_mention, line_dash="dash", line_color="gray")
-
-            fig.update_layout(height=600, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig, use_container_width=True)
-
-            # 数据明细表
-            st.subheader("📊 详细维度指标")
-            st.dataframe(res_df.sort_values("心智提及率(%)", ascending=False), use_container_width=True)
+            result_df = pd.DataFrame(all_results)
             
-            st.info("💡 提示：'关联产品月销量' 已根据 ASIN 进行去重计算，反映了主打该卖点的真实市场规模。")
-        else:
-            st.warning("所选关键词在数据中未匹配到结果。")
-else:
-    st.info("👋 请在左侧上传评论数据文件开始分析。系统将自动处理 ASIN 去重逻辑。")
+            if result_df.empty:
+                st.error("❌ 未匹配到任何关键词！请检查：1.评论是否为英文 2.词库是否包含这些表达方式。")
+            else:
+                # --- 展示分析结果 ---
+                st.success(f"分析完成！共命中 {len(result_df)} 个特征点。")
+                
+                # 维度 1: 满意度 (NPS) 排行
+                st.subheader("💡 维度满意度净值 (情感指数)")
+                sentiment_analysis = result_df.groupby('维度')['得分'].mean().sort_values().reset_index()
+                fig = px.bar(sentiment_analysis, x='得分', y='维度', orientation='h',
+                             color='得分', color_continuous_scale='RdYlGn',
+                             labels={'得分': '情感指数 (-1至1)'})
+                st.plotly_chart(fig, use_container_width=True)
+
+                # 维度 2: 关注度排行
+                st.subheader("🔥 消费者关注焦点分布")
+                focus_analysis = result_df['维度'].value_counts().reset_index()
+                fig2 = px.pie(focus_analysis, values='count', names='维度', hole=0.4)
+                st.plotly_chart(fig2, use_container_width=True)
+
+                # 维度 3: 词库命中明细
+                st.subheader("📋 命中明细展示 (前 10 条)")
+                st.dataframe(result_df.head(10))
+
+# --- 5. 帮助说明 ---
+with st.expander("如何阅读此看板？"):
+    st.write("""
+    1. **情感指数 > 0**: 代表该维度用户评价偏向**正面**（卖点）。
+    2. **情感指数 < 0**: 代表该维度用户评价偏向**负面**（痛点/质量问题）。
+    3. **饼图占比**: 代表用户提到的**频率**，占比越高，说明用户越在意这个点。
+    """)
