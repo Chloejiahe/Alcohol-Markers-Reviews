@@ -72,10 +72,15 @@ st.title("🖌️ 酒精笔卖点闭环反馈分析系统")
 
 # 侧边栏：文件上传
 st.sidebar.header("数据上传")
-uploaded_file = st.sidebar.file_uploader("上传您的评论数据 (XLSX 格式)", type=["xlsx"])
+uploaded_file = st.sidebar.file_uploader("上传您的评论数据 (XLSX 或 CSV)", type=["xlsx", "csv"])
 
 if uploaded_file:
-    df = pd.read_xlsx(uploaded_file)
+    # 自动根据文件后缀识别读取方式
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
+    else:
+        # 确保安装了 openpyxl 库：pip install openpyxl
+        df = pd.read_excel(uploaded_file)
 
     # 侧边栏：关键词设置
     st.sidebar.header("分析设置")
