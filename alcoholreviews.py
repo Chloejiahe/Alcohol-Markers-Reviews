@@ -72,10 +72,10 @@ st.title("🖌️ 酒精笔卖点闭环反馈分析系统")
 
 # 侧边栏：文件上传
 st.sidebar.header("数据上传")
-uploaded_file = st.sidebar.file_uploader("上传您的评论数据 (CSV 格式)", type=["csv"])
+uploaded_file = st.sidebar.file_uploader("上传您的评论数据 (XLSX 格式)", type=["xlsx"])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+    df = pd.read_xlsx(uploaded_file)
 
     # 侧边栏：关键词设置
     st.sidebar.header("分析设置")
