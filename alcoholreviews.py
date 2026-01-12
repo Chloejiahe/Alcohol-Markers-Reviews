@@ -33,6 +33,13 @@ FEATURE_KEYWORDS = {
 
 # --- 2. 核心逻辑函数 ---
 def analyze_closed_loop_with_lexicon(df, keywords):
+    # 自动识别列名（防止大小写坑）
+    # 检查 Title 和 Review Content 是否存在
+    cols = {c.lower(): c for c in df.columns}
+    title_col = cols.get('title', 'Title')
+    review_col = cols.get('review content', 'Review Content')
+    sales_col = cols.get('average monthly sales', 'Average Monthly sales')
+
     all_pos_phrases = [p for cat in FEATURE_KEYWORDS.values() for p in cat.get('正面', [])]
     all_neg_phrases = [p for cat in FEATURE_KEYWORDS.values() for p in cat.get('负面', [])]
 
@@ -41,16 +48,18 @@ def analyze_closed_loop_with_lexicon(df, keywords):
 
     results = []
     for kw in keywords:
-        mask = df['Title'].str.contains(kw, case=False, na=False)
+        # 修改处：使用 title_col 变量
+        mask = df[title_col].str.contains(kw, case=False, na=False)
         sub_df = df[mask].copy()
         if sub_df.empty: continue
 
         total_reviews = len(sub_df)
-        mention_mask = sub_df['Review Content'].str.contains(kw, case=False, na=False)
+        # 修改处：使用 review_col 变量
+        mention_mask = sub_df[review_col].str.contains(kw, case=False, na=False)
         mention_count = mention_mask.sum()
         mention_rate = (mention_count / total_reviews) * 100 if total_reviews > 0 else 0
 
-        relevant_reviews = sub_df[mention_mask]['Review Content'].astype(str)
+        relevant_reviews = sub_df[mention_mask][review_col].astype(str)
         pos_hits = relevant_reviews.apply(lambda x: len(pos_regex.findall(x))).sum()
         neg_hits = relevant_reviews.apply(lambda x: len(neg_regex.findall(x))).sum()
 
@@ -60,7 +69,7 @@ def analyze_closed_loop_with_lexicon(df, keywords):
             "关键词": kw,
             "心智提及率(%)": round(mention_rate, 2),
             "情感正向指数": round(sentiment_score, 3),
-            "关联产品月销量": int(pd.to_numeric(sub_df['Average Monthly sales'], errors='coerce').sum()),
+            "关联产品月销量": int(pd.to_numeric(sub_df[sales_col], errors='coerce').sum()),
             "样本评论量": total_reviews,
             "正面词命中": pos_hits,
             "负面词命中": neg_hits
