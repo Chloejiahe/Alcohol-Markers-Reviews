@@ -337,52 +337,60 @@ FEATURE_KEYWORDS = {
         }
 
 # --- 3. 分析逻辑函数 (解决 0 匹配的关键) ---
-def analyze_review_sentiment(text, dictionary):
-    if pd.isna(text):
-        return []
+@st.cache_data(show_spinner=False)
+def process_full_analysis(df, column_name, keywords_dict):
+    all_results = []
     
-    text = str(text).lower()  # 统一转小写进行匹配
-    matches = []
-    
-    for category, sub_dict in dictionary.items():
-        for label, keywords in sub_dict.items():
-            for kw in keywords:
-                # 核心改变：使用 \b 单词边界匹配，并处理特殊字符
-                pattern = r'\b' + re.escape(kw.lower()) + r'\b'
-                if re.search(pattern, text):
-                    score = 0
-                    if '正面' in label: score = 1
-                    elif '负面' in label: score = -1
-                    
-                    matches.append({
-                        "维度": category,
-                        "标签": label,
-                        "得分": score,
-                        "命中词": kw
-                    })
-    return matches
+    # 提前编译正则表达式以提高性能
+    # 建立标签与得分的映射，避免在循环中反复判断字符串
+    for i, row in df.iterrows():
+        text = str(row[column_name]).lower()
+        if pd.isna(text):
+            continue
+            
+        for category, sub_dict in keywords_dict.items():
+            for label, keywords in sub_dict.items():
+                # 设置分值
+                score = 0
+                if '正面' in label: score = 1
+                elif '负面' in label: score = -1
+                
+                for kw in keywords:
+                    # 使用单词边界 \b 加速匹配
+                    pattern = r'\b' + re.escape(kw.lower()) + r'\b'
+                    if re.search(pattern, text):
+                        all_results.append({
+                            "Row_Index": i,
+                            "维度": category,
+                            "标签": label,
+                            "得分": score,
+                            "命中词": kw
+                        })
+    return pd.DataFrame(all_results)
 
 # --- 4. Streamlit UI 界面 ---
 st.header("🎨 酒精马克笔用户评论自动化分析")
-st.write("将复杂的非结构化评论转化为可量化的维度得分。")
+st.write("已启用 **st.cache_data** 加速引擎：相同文件不会重复计算。")
 
 uploaded_file = st.file_uploader("第一步：上传您的数据文件 (Excel/CSV)", type=["xlsx", "csv"])
 
 if uploaded_file:
-    # 读取数据
-    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+    # 缓存读取文件步骤
+    @st.cache_data
+    def load_data(file):
+        if file.name.endswith('.csv'):
+            return pd.read_csv(file)
+        return pd.read_excel(file)
+
+    df = load_data(uploaded_file)
     review_col = st.selectbox("第二步：选择评论内容所在的列", df.columns)
     
     if st.button("开始深度分析"):
-        with st.spinner('正在分析中...'):
-            all_results = []
-            for i, row in df.iterrows():
-                findings = analyze_review_sentiment(row[review_col], FEATURE_KEYWORDS)
-                for f in findings:
-                    f['Row_Index'] = i
-                    all_results.append(f)
+        with st.spinner('正在进行词库全量扫描 (大数据量仅首次运行较慢)...'):
             
-            result_df = pd.DataFrame(all_results)
+            # 调用加速后的分析函数
+            # 注意：传入 FEATURE_KEYWORDS 时，由于它是大字典，Streamlit 会自动进行哈希对比
+            result_df = process_full_analysis(df, review_col, FEATURE_KEYWORDS)
             
             if result_df.empty:
                 st.error("❌ 未匹配到任何关键词！请检查：1.评论是否为英文 2.词库是否包含这些表达方式。")
@@ -401,12 +409,14 @@ if uploaded_file:
                 # 维度 2: 关注度排行
                 st.subheader("🔥 消费者关注焦点分布")
                 focus_analysis = result_df['维度'].value_counts().reset_index()
+                # 适配新版 plotly 的列名
+                focus_analysis.columns = ['维度', 'count']
                 fig2 = px.pie(focus_analysis, values='count', names='维度', hole=0.4)
                 st.plotly_chart(fig2, use_container_width=True)
 
                 # 维度 3: 词库命中明细
                 st.subheader("📋 命中明细展示 (前 10 条)")
-                st.dataframe(result_df.head(10))
+                st.dataframe(result_df.head(10), use_container_width=True)
 
 # --- 5. 帮助说明 ---
 with st.expander("如何阅读此看板？"):
