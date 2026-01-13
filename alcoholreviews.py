@@ -42,8 +42,8 @@ def analyze_market_echo(df):
         all_title_words.extend(ks)
     
     kw_counts = Counter(all_title_words)
-    # 取标题中出现频率最高的前 50 个关键词
-    top_kws = [item[0] for item in kw_counts.most_common(50)]
+    # 取标题中出现频率最高的前 100 个关键词
+    top_kws = [item[0] for item in kw_counts.most_common(100)]
 
     # --- B. 评论端统计 (按 评论行数 统计) ---
     analysis_data = []
