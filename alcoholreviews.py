@@ -337,40 +337,48 @@ FEATURE_KEYWORDS = {
         }
 
 # --- 3. 分析逻辑函数 (解决 0 匹配的关键) ---
-@st.cache_data(show_spinner=False)
-def process_full_analysis(df, column_name, keywords_dict):
-    all_results = []
+@st.cache_data
+def analyze_data_advanced(df, title_col, review_col, date_col, dictionary):
+    results = []
     
-    # 提前编译正则表达式以提高性能
-    # 建立标签与得分的映射，避免在循环中反复判断字符串
+    # 预编译正则提高效率
+    compiled_patterns = {}
+    for cat, sub in dictionary.items():
+        for label, kws in sub.items():
+            for kw in kws:
+                compiled_patterns[kw] = re.compile(r'\b' + re.escape(kw.lower()) + r'\b')
+
     for i, row in df.iterrows():
-        text = str(row[column_name]).lower()
-        if pd.isna(text):
-            continue
-            
-        for category, sub_dict in keywords_dict.items():
+        title_text = str(row[title_col]).lower() if title_col else ""
+        review_text = str(row[review_col]).lower()
+        date_val = row[date_col] if date_col else None
+        
+        for category, sub_dict in dictionary.items():
             for label, keywords in sub_dict.items():
-                # 设置分值
-                score = 0
-                if '正面' in label: score = 1
-                elif '负面' in label: score = -1
+                score = 1 if '正面' in label else (-1 if '负面' in label else 0)
                 
                 for kw in keywords:
-                    # 使用单词边界 \b 加速匹配
-                    pattern = r'\b' + re.escape(kw.lower()) + r'\b'
-                    if re.search(pattern, text):
-                        all_results.append({
-                            "Row_Index": i,
+                    pattern = compiled_patterns[kw]
+                    in_title = bool(re.search(pattern, title_text))
+                    in_review = bool(re.search(pattern, review_text))
+                    
+                    if in_title or in_review:
+                        results.append({
+                            "Date": date_val,
                             "维度": category,
                             "标签": label,
                             "得分": score,
-                            "命中词": kw
+                            "关键词": kw,
+                            "出现在标题": in_title,
+                            "出现在评论": in_review,
+                            "闭环匹配": in_title and in_review
                         })
-    return pd.DataFrame(all_results)
+    return pd.DataFrame(results)
 
 # --- 4. Streamlit UI 界面 ---
+# --- 4. Streamlit UI 界面 ---
 st.header("🎨 酒精马克笔用户评论自动化分析")
-st.write("已启用 **st.cache_data** 加速引擎：相同文件不会重复计算。")
+st.info("已启用底层加速引擎。当前模式：支持标题-评论闭环分析与月度趋势追踪。")
 
 uploaded_file = st.file_uploader("第一步：上传您的数据文件 (Excel/CSV)", type=["xlsx", "csv"])
 
@@ -382,41 +390,81 @@ if uploaded_file:
             return pd.read_csv(file)
         return pd.read_excel(file)
 
-    df = load_data(uploaded_file)
-    review_col = st.selectbox("第二步：选择评论内容所在的列", df.columns)
+    df_raw = load_data(uploaded_file)
     
-    if st.button("开始深度分析"):
-        with st.spinner('正在进行词库全量扫描 (大数据量仅首次运行较慢)...'):
+    # 动态配置列
+    st.subheader("⚙️ 第二步：配置分析维度")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        title_col = st.selectbox("选择标题列 (用于闭环匹配)", [None] + list(df_raw.columns))
+    with c2:
+        review_col = st.selectbox("选择评论内容列", df_raw.columns)
+    with c3:
+        date_col = st.selectbox("选择日期列 (用于趋势分析)", [None] + list(df_raw.columns))
+
+    if st.button("开始深度闭环分析"):
+        with st.spinner('正在运行高级分析逻辑...'):
             
-            # 调用加速后的分析函数
-            # 注意：传入 FEATURE_KEYWORDS 时，由于它是大字典，Streamlit 会自动进行哈希对比
-            result_df = process_full_analysis(df, review_col, FEATURE_KEYWORDS)
+            # 1. 调用你已经写好的高级分析函数
+            # 它会返回包含 "出现在标题", "出现在评论", "闭环匹配" 等字段的 DataFrame
+            result_df = analyze_data_advanced(df_raw, title_col, review_col, date_col, FEATURE_KEYWORDS)
             
             if result_df.empty:
-                st.error("❌ 未匹配到任何关键词！请检查：1.评论是否为英文 2.词库是否包含这些表达方式。")
+                st.error("❌ 未匹配到任何关键词！请检查词库。")
             else:
-                # --- 展示分析结果 ---
                 st.success(f"分析完成！共命中 {len(result_df)} 个特征点。")
                 
-                # 维度 1: 满意度 (NPS) 排行
-                st.subheader("💡 维度满意度净值 (情感指数)")
-                sentiment_analysis = result_df.groupby('维度')['得分'].mean().sort_values().reset_index()
-                fig = px.bar(sentiment_analysis, x='得分', y='维度', orientation='h',
-                             color='得分', color_continuous_scale='RdYlGn',
-                             labels={'得分': '情感指数 (-1至1)'})
-                st.plotly_chart(fig, use_container_width=True)
+                # --- 可视化 A: 闭环反馈 (核心需求) ---
+                st.divider()
+                st.subheader("🔄 闭环反馈：标题营销 vs 评论真实感知")
+                
+                # 聚合维度数据
+                loop_stats = result_df.groupby("维度").agg({
+                    "出现在标题": "sum",
+                    "出现在评论": "sum",
+                    "闭环匹配": "sum"
+                }).reset_index()
+                
+                fig_loop = px.bar(loop_stats, x="维度", y=["出现在标题", "出现在评论", "闭环匹配"],
+                                 barmode="group", 
+                                 title="营销卖点(标题)在用户评论中的渗透率",
+                                 labels={"value": "频次", "variable": "匹配类型"})
+                st.plotly_chart(fig_loop, use_container_width=True)
 
-                # 维度 2: 关注度排行
-                st.subheader("🔥 消费者关注焦点分布")
-                focus_analysis = result_df['维度'].value_counts().reset_index()
-                # 适配新版 plotly 的列名
-                focus_analysis.columns = ['维度', 'count']
-                fig2 = px.pie(focus_analysis, values='count', names='维度', hole=0.4)
-                st.plotly_chart(fig2, use_container_width=True)
+                # --- 可视化 B: 时间趋势 (核心需求) ---
+                if date_col and "Date" in result_df.columns:
+                    st.divider()
+                    st.subheader("📈 情感趋势随时间变化")
+                    
+                    # 预处理：确保 Date 是时间格式并按月聚合
+                    result_df['Date'] = pd.to_datetime(result_df['Date']).dt.to_period('M').astype(str)
+                    trend_df = result_df.groupby(['Date', '维度'])['得分'].mean().reset_index()
+                    
+                    fig_trend = px.line(trend_df, x="Date", y="得分", color="维度",
+                                       title="关键维度情感得分走势 (满意度波动)", markers=True)
+                    st.plotly_chart(fig_trend, use_container_width=True)
 
-                # 维度 3: 词库命中明细
-                st.subheader("📋 命中明细展示 (前 10 条)")
-                st.dataframe(result_df.head(10), use_container_width=True)
+                # --- 可视化 C: 满意度与关注度 (原有基础图表) ---
+                st.divider()
+                col_left, col_right = st.columns(2)
+                
+                with col_left:
+                    st.subheader("💡 维度平均满意度")
+                    sentiment_analysis = result_df.groupby('维度')['得分'].mean().sort_values().reset_index()
+                    fig_sent = px.bar(sentiment_analysis, x='得分', y='维度', orientation='h',
+                                     color='得分', color_continuous_scale='RdYlGn')
+                    st.plotly_chart(fig_sent, use_container_width=True)
+                
+                with col_right:
+                    st.subheader("🔥 消费者关注焦点")
+                    focus_analysis = result_df['维度'].value_counts().reset_index()
+                    focus_analysis.columns = ['维度', 'count']
+                    fig_pie = px.pie(focus_analysis, values='count', names='维度', hole=0.4)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+
+                # 详情表格
+                with st.expander("查看原始匹配明细"):
+                    st.dataframe(result_df, use_container_width=True)
 
 # --- 5. 帮助说明 ---
 with st.expander("如何阅读此看板？"):
