@@ -82,7 +82,7 @@ EXTENDED_MAPPING = {
     "anime": ["anime", "manga", "comic", "characters"],
     "blendable": ["blendable", "blending", "mix", "seamless"],
     "168": ["168", "count", "set", "massive"],
-    "wellokb": ["wellokb,"brand"],
+    "wellokb": ["wellokb","brand"],
     "oahu": ["oahu", "ohuhu","brand"],
     "taotree": ["taotree","brand"],
     "soucolor": ["soucolor","brand"],
