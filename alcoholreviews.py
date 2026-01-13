@@ -336,9 +336,9 @@ FEATURE_KEYWORDS = {
             }
         }
 
-# --- 3. 分析逻辑函数 (解决 0 匹配的关键) ---
+# --- 3. 分析逻辑函数 (移除时间处理，聚焦闭环) ---
 @st.cache_data
-def analyze_data_advanced(df, title_col, review_col, date_col, dictionary):
+def analyze_data_advanced(df, title_col, review_col, dictionary):
     results = []
     
     # 预编译正则提高效率
@@ -349,12 +349,13 @@ def analyze_data_advanced(df, title_col, review_col, date_col, dictionary):
                 compiled_patterns[kw] = re.compile(r'\b' + re.escape(kw.lower()) + r'\b')
 
     for i, row in df.iterrows():
+        # 获取标题和评论文本
         title_text = str(row[title_col]).lower() if title_col else ""
         review_text = str(row[review_col]).lower()
-        date_val = row[date_col] if date_col else None
         
         for category, sub_dict in dictionary.items():
             for label, keywords in sub_dict.items():
+                # 计算得分：正面1，负面-1，中性0
                 score = 1 if '正面' in label else (-1 if '负面' in label else 0)
                 
                 for kw in keywords:
@@ -362,9 +363,9 @@ def analyze_data_advanced(df, title_col, review_col, date_col, dictionary):
                     in_title = bool(re.search(pattern, title_text))
                     in_review = bool(re.search(pattern, review_text))
                     
+                    # 只要命中其一就记录
                     if in_title or in_review:
                         results.append({
-                            "Date": date_val,
                             "维度": category,
                             "标签": label,
                             "得分": score,
@@ -376,14 +377,12 @@ def analyze_data_advanced(df, title_col, review_col, date_col, dictionary):
     return pd.DataFrame(results)
 
 # --- 4. Streamlit UI 界面 ---
-# --- 4. Streamlit UI 界面 ---
-st.header("🎨 酒精马克笔用户评论自动化分析")
-st.info("已启用底层加速引擎。当前模式：支持标题-评论闭环分析与月度趋势追踪。")
+st.header("🎨 酒精马克笔竞品 VOC 闭环分析")
+st.info("当前模式：静态对比分析。重点观察：竞品宣传点（标题）与用户反响（评论）的匹配度。")
 
-uploaded_file = st.file_uploader("第一步：上传您的数据文件 (Excel/CSV)", type=["xlsx", "csv"])
+uploaded_file = st.file_uploader("第一步：上传数据文件 (Excel/CSV)", type=["xlsx", "csv"])
 
 if uploaded_file:
-    # 缓存读取文件步骤
     @st.cache_data
     def load_data(file):
         if file.name.endswith('.csv'):
@@ -392,84 +391,107 @@ if uploaded_file:
 
     df_raw = load_data(uploaded_file)
     
-    # 动态配置列
-    st.subheader("⚙️ 第二步：配置分析维度")
-    c1, c2, c3 = st.columns(3)
+    st.subheader("⚙️ 第二步：配置分析列")
+    c1, c2 = st.columns(2)
     with c1:
-        title_col = st.selectbox("选择标题列 (用于闭环匹配)", [None] + list(df_raw.columns))
+        title_col = st.selectbox("选择竞品【标题】列", [None] + list(df_raw.columns))
     with c2:
-        review_col = st.selectbox("选择评论内容列", df_raw.columns)
-    with c3:
-        date_col = st.selectbox("选择日期列 (用于趋势分析)", [None] + list(df_raw.columns))
+        review_col = st.selectbox("选择竞品【评论】列", df_raw.columns)
 
-    if st.button("开始深度闭环分析"):
-        with st.spinner('正在运行高级分析逻辑...'):
+    if st.button("开始执行深度分析"):
+        with st.spinner('正在进行词库全量扫描...'):
             
-            # 1. 调用你已经写好的高级分析函数
-            # 它会返回包含 "出现在标题", "出现在评论", "闭环匹配" 等字段的 DataFrame
-            result_df = analyze_data_advanced(df_raw, title_col, review_col, date_col, FEATURE_KEYWORDS)
+            # 调用函数（不传 date_col）
+            result_df = analyze_data_advanced(df_raw, title_col, review_col, FEATURE_KEYWORDS)
             
             if result_df.empty:
-                st.error("❌ 未匹配到任何关键词！请检查词库。")
+                st.error("❌ 未匹配到任何关键词！请检查词库是否与竞品描述匹配。")
             else:
                 st.success(f"分析完成！共命中 {len(result_df)} 个特征点。")
                 
-                # --- 可视化 A: 闭环反馈 (核心需求) ---
+                # --- 可视化 A: 闭环反馈 ---
                 st.divider()
-                st.subheader("🔄 闭环反馈：标题营销 vs 评论真实感知")
+                st.subheader("🔄 闭环反馈：竞品卖点宣传 vs 用户感知")
                 
-                # 聚合维度数据
                 loop_stats = result_df.groupby("维度").agg({
                     "出现在标题": "sum",
                     "出现在评论": "sum",
                     "闭环匹配": "sum"
                 }).reset_index()
                 
+                # 绘图
                 fig_loop = px.bar(loop_stats, x="维度", y=["出现在标题", "出现在评论", "闭环匹配"],
-                                 barmode="group", 
-                                 title="营销卖点(标题)在用户评论中的渗透率",
-                                 labels={"value": "频次", "variable": "匹配类型"})
+                                 barmode="group",
+                                 title="竞品营销承接效率 (闭环匹配越高说明用户越认可该卖点)",
+                                 labels={"value": "频次", "variable": "匹配类型"},
+                                 color_discrete_map={"出现在标题": "#636EFA", "出现在评论": "#EF553B", "闭环匹配": "#00CC96"})
                 st.plotly_chart(fig_loop, use_container_width=True)
 
-                # --- 可视化 B: 时间趋势 (核心需求) ---
-                if date_col and "Date" in result_df.columns:
-                    st.divider()
-                    st.subheader("📈 情感趋势随时间变化")
-                    
-                    # 预处理：确保 Date 是时间格式并按月聚合
-                    result_df['Date'] = pd.to_datetime(result_df['Date']).dt.to_period('M').astype(str)
-                    trend_df = result_df.groupby(['Date', '维度'])['得分'].mean().reset_index()
-                    
-                    fig_trend = px.line(trend_df, x="Date", y="得分", color="维度",
-                                       title="关键维度情感得分走势 (满意度波动)", markers=True)
-                    st.plotly_chart(fig_trend, use_container_width=True)
-
-                # --- 可视化 C: 满意度与关注度 (原有基础图表) ---
+                # --- 可视化 B: 满意度与关注度 ---
                 st.divider()
                 col_left, col_right = st.columns(2)
                 
                 with col_left:
-                    st.subheader("💡 维度平均满意度")
+                    st.subheader("💡 竞品各维度情感得分")
                     sentiment_analysis = result_df.groupby('维度')['得分'].mean().sort_values().reset_index()
                     fig_sent = px.bar(sentiment_analysis, x='得分', y='维度', orientation='h',
-                                     color='得分', color_continuous_scale='RdYlGn')
+                                     color='得分', color_continuous_scale='RdYlGn',
+                                     range_x=[-1, 1])
                     st.plotly_chart(fig_sent, use_container_width=True)
                 
                 with col_right:
-                    st.subheader("🔥 消费者关注焦点")
+                    st.subheader("🔥 竞品用户讨论焦点分布")
                     focus_analysis = result_df['维度'].value_counts().reset_index()
                     focus_analysis.columns = ['维度', 'count']
                     fig_pie = px.pie(focus_analysis, values='count', names='维度', hole=0.4)
                     st.plotly_chart(fig_pie, use_container_width=True)
 
                 # 详情表格
-                with st.expander("查看原始匹配明细"):
+                with st.expander("查看关键词命中明细"):
                     st.dataframe(result_df, use_container_width=True)
+                # --- 可视化 C: 关键词对比分析 ---
+                st.divider()
+                st.subheader("🔍 维度深度下钻：正负关键词对比")
+                
+                # 让用户选择想要深入查看的维度
+                target_dimension = st.selectbox("选择一个维度进行关键词拆解", result_df['维度'].unique())
+                
+                if target_dimension:
+                    # 过滤该维度下的正负数据
+                    dim_data = result_df[result_df['维度'] == target_dimension]
+                    pos_words = dim_data[dim_data['得分'] > 0]['关键词'].value_counts().reset_index()
+                    neg_words = dim_data[dim_data['得分'] < 0]['关键词'].value_counts().reset_index()
+                    
+                    # 适配列名
+                    pos_words.columns = ['关键词', '频次']
+                    neg_words.columns = ['关键词', '频次']
+                    
+                    col_pos, col_neg = st.columns(2)
+                    
+                    with col_pos:
+                        st.markdown(f"✅ **{target_dimension} - 用户最满意点**")
+                        if not pos_words.empty:
+                            fig_pos = px.bar(pos_words.head(10), x='频次', y='关键词', 
+                                            orientation='h', color_discrete_sequence=['#00CC96'],
+                                            title="Top 10 正面评价词")
+                            st.plotly_chart(fig_pos, use_container_width=True)
+                        else:
+                            st.info("暂无正面评价数据")
+                            
+                    with col_neg:
+                        st.markdown(f"❌ **{target_dimension} - 用户最反感点**")
+                        if not neg_words.empty:
+                            fig_neg = px.bar(neg_words.head(10), x='频次', y='关键词', 
+                                            orientation='h', color_discrete_sequence=['#EF553B'],
+                                            title="Top 10 负面评价词")
+                            st.plotly_chart(fig_neg, use_container_width=True)
+                        else:
+                            st.info("暂无负面评价数据")                     
 
-# --- 5. 帮助说明 ---
-with st.expander("如何阅读此看板？"):
+# --- 5. 竞品分析说明 ---
+with st.expander("📝 竞品洞察指南"):
     st.write("""
-    1. **情感指数 > 0**: 代表该维度用户评价偏向**正面**（卖点）。
-    2. **情感指数 < 0**: 代表该维度用户评价偏向**负面**（痛点/质量问题）。
-    3. **饼图占比**: 代表用户提到的**频率**，占比越高，说明用户越在意这个点。
+    - **寻找缺口**：如果某个维度“出现在标题”很高，但“出现在评论”极低，说明该竞品在虚假宣传或卖点无效。
+    - **寻找惊喜点**：如果某个维度“出现在标题”为0，但“出现在评论”很高值，说明发现了竞品未察觉的隐藏需求。
+    - **得分策略**：情感得分低的维度（负分）是竞品的痛点，也是你产品切入的机会点。
     """)
