@@ -46,23 +46,40 @@ def analyze_market_echo(df):
     top_kws = [item[0] for item in kw_counts.most_common(100)]
 
     # --- B. 评论端统计 (按 评论行数 统计) ---
+# --- 核心分析循环修改 ---
     analysis_data = []
-    for kw in top_kws:
-        # 1. 标题端指标 (基于 ASIN)
-        title_mentions = kw_counts[kw]
+    for kw, synonyms in EXTENDED_MAPPING.items():
+        # 1. 找到标题里包含该核心词的 ASIN 列表
+        pattern_title = fr'\b{re.escape(kw)}\b'
+        relevant_asins = asin_level_df[asin_level_df['Title'].str.contains(pattern_title, na=False)]['ASIN'].tolist()
+        
+        title_mentions = len(relevant_asins) # 标题渗透数
         title_penetration = (title_mentions / total_asins) * 100
         
-        # 2. 评论端指标 (基于 行数，使用精确全词匹配 \b)
-        pattern = fr'\b{kw}\b'
-        review_mentions = df['Review Content'].str.contains(pattern, case=False, na=False).sum()
-        review_echo_rate = (review_mentions / total_reviews) * 100
-        
+        # 2. 仅针对这些 ASIN 的评论进行分析
+        if title_mentions > 0:
+            relevant_reviews_df = df[df['ASIN'].isin(relevant_asins)]
+            specific_total_reviews = len(relevant_reviews_df) # 该卖点关联的总评论分母
+            
+            # 匹配延伸词库（语义丛）
+            pattern_review = r'\b(' + '|'.join([re.escape(w) for w in synonyms]) + r')\b'
+            review_mentions = relevant_reviews_df['Review Content'].str.contains(pattern_review, na=False).sum()
+            
+            # 关键修改：除以该卖点关联的评论总数
+            review_echo_rate = (review_mentions / specific_total_reviews) * 100
+        else:
+            review_mentions = 0
+            review_echo_rate = 0
+            specific_total_reviews = 0
+
         analysis_data.append({
             "关键词": kw,
-            "标题提及次数 (ASIN数)": title_mentions,
+            "标题提及ASIN数": title_mentions,
             "标题渗透率 (%)": round(title_penetration, 2),
-            "评论提及次数 (行数)": review_mentions,
-            "评论回声率 (%)": round(review_echo_rate, 2)
+            "关联评论总数": specific_total_reviews, # 新增辅助列，方便排查
+            "语义命中次数": review_mentions,
+            "评论回声率 (%)": round(review_echo_rate, 2),
+            "心智转化比": round(review_echo_rate / (title_penetration if title_penetration > 0 else 1), 2)
         })
 
     result_df = pd.DataFrame(analysis_data)
