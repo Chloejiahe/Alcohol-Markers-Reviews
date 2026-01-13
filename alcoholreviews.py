@@ -6,128 +6,208 @@ from collections import Counter
 # 设置页面宽度和标题
 st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
 
-# --- 1. 极其基础的分词函数 ---
+# --- 0. 配置词库 ---
+EXTENDED_MAPPING = {
+    "alcohol": ["alcohol", "permanent", "ink"],
+    "markers": ["markers", "marker", "pens", "pen"],
+    "colors": ["colors", "color", "shades", "pigments"],
+    "coloring": ["coloring", "color in", "fill in"],
+    "art": ["art", "artist", "artwork"],
+    "dual": ["dual", "double", "two sided", "both ends"],
+    "tip": ["tip", "tips", "nib", "point"],
+    "drawing": ["drawing", "draw", "strokes"],
+    "set": ["set", "kit", "pack", "bundle"],
+    "marker": ["marker", "pen"],
+    "kids": ["kids", "children", "child", "son", "daughter"],
+    "adult": ["adult", "adults", "grown up"],
+    "sketching": ["sketching", "sketch", "doodle"],
+    "illustration": ["illustration", "illustrations", "illustrate"],
+    "adults": ["adults", "adult", "grown ups", "coloring"],
+    "chisel": ["chisel", "broad", "wide", "wedge"],
+    "sketch": ["sketch", "sketching", "sketches", "doodle"],
+    "artist": ["artist", "artists", "professional"],
+    "fine": ["fine", "point", "small", "thin", "detail"],
+    "case": ["case", "bag", "organizer", "holder", "carrying"],
+    "permanent": ["permanent", "alcohol", "waterproof"],
+    "brush": ["brush", "flexible", "soft", "foam"],
+    "tips": ["tips", "tip", "nib", "nibs"],
+    "painting": ["painting", "paint", "color"],
+    "perfect": ["perfect", "great", "excellent", "ideal"],
+    "pens": ["pens", "pen", "markers", "marker"],
+    "double": ["double", "dual", "two ends", "both sides"],
+    "refillable": ["refillable", "refills", "refill", "ink bottle"],
+    "artists": ["artists", "artist", "pro", "professional"],
+    "tipped": ["tipped", "tip", "ends"],
+    "supplies": ["supplies", "stationary", "tools", "kit"],
+    "ohuhu": ["ohuhu", "honolulu", "oahu","brand"],
+    "book": ["book", "books", "coloring book", "pages"],
+    "color": ["color", "colors", "shades", "palette"],
+    "blender": ["blender", "blending", "mix"],
+    "books": ["books", "book", "coloring books"],
+    "card": ["card", "cards", "cardstock", "postcards"],
+    "making": ["making", "craft", "create", "diy"],
+    "students": ["students", "student", "school", "class"],
+    "gift": ["gift", "gifts", "present", "birthday"],
+    "ink": ["ink", "fluid", "juicy", "dry"],
+    "pen": ["pen", "pens", "marker", "markers"],
+    "100": [100, count, variety, huge set, large pack, plenty, lots of],
+    "plus": ["plus", "extra", "bonus", "additional"],
+    "certificated": ["certificated", "safe", "non-toxic", "certification", "sds", "conform"],
+    "caliart": ["caliart","brand"],
+    "colorless": ["colorless", "blender", "0", "clear"],
+    "shuttle": ["shuttle", "shuttle art","brand"],
+    "gifts": ["gifts", "gift", "present", "birthday", "christmas"],
+    "white": ["white", "highlight", "blender", "light"],
+    "120": ["120", "count", "huge", "variety", "selection"],
+    "honolulu": ["honolulu", "ohuhu","brand"],
+    "colored": ["colored", "color", "colors", "pigment"],
+    "pastel": ["pastel", "pale", "light colors", "soft"],
+    "black": ["black", "dark", "outline", "liner"],
+    "holders": ["holders", "case", "stand", "tray", "base"],
+    "262": ["262", "massive", "every color", "giant", "complete"],
+    "blending": ["blending", "blend", "mix", "gradient", "seamless"],
+    "carrying": ["carrying", "case", "bag", "portable", "travel"],
+    "tone": ["tone", "tones", "skin", "shades"],
+    "kit": ["kit", "set", "pack", "supplies", "bundle"],
+    "illustrations": ["illustrations", "illustration"],
+    "girls": ["girls", "girl", "daughter", "granddaughter", "niece"],
+    "boys": ["boys", "boy", "son", "grandson", "nephew"],
+    "portrait": ["portrait", "faces", "skin", "flesh", "people"],
+    "sfaih": ["sfaih","brand"],
+    "skin": ["skin", "flesh", "portrait", "tones", "nude"],
+    "broad": ["broad", "chisel", "wide", "thick"],
+    "professional": ["professional", "pro", "quality", "artist grade"],
+    "school": ["school", "class", "project", "student"],
+    "base": ["base", "alcohol based"],
+    "anime": ["anime", "manga", "comic", "characters"],
+    "blendable": ["blendable", "blending", "mix", "seamless"],
+    "168": ["168", "count", "set", "massive"],
+    "wellokb": ["wellokb,"brand"],
+    "oahu": ["oahu", "ohuhu","brand"],
+    "taotree": ["taotree","brand"],
+    "soucolor": ["soucolor","brand"],
+    "animation": ["animation", "anime", "cartoon", "characters"],
+    "penholder": ["penholder", "base", "stand", "organizer", "tray"],
+    "anymark": ["anymark", "brand"],
+    "copic": ["copic","brand"],
+    "cute": ["cute", "adorable", "kawaii", "lovely", "pretty"],
+    "121": ["121", "massive", "every color", "giant", "count", "set"],
+    "teen": ["teen", "teens", "teenager", "youth"],
+    "aesthetic": ["aesthetic", "beautiful", "vibrant", "pretty"],
+    "creators": ["creators", "creator", "artists"],
+    "pad": ["pad", "paper", "sketchbook", "cardstock"],
+    "barrel": ["barrel", "handle", "hold", "grip", "shape"],
+    "bonus": ["bonus", "extra", "free", "additional", "gift"],
+    "series": ["series", "collection", "set"],
+    "highlighters": ["highlighters", "highlighting", "neon", "bright"],
+    "teens": ["teens", "teenager", "youth", "12-15"],
+    "easter": ["easter", "spring", "basket", "holiday"],
+    "decorations": ["decorations", "decor", "craft", "diy"],
+    "memoffice": ["memoffice", "brand"],
+    "stuffers": ["stuffers", "fillers", "gift", "stocking"],
+    "underlining": ["underlining", "underline", "highlight", "note taking"],
+    "halloween": ["halloween", "spooky", "fall", "orange", "black"],
+    "eggs": ["eggs", "egg", "easter", "coloring"]
+}
+
+CLEAN_MAPPING = {str(k).lower(): [str(i).lower() for i in v] for k, v in EXTENDED_MAPPING.items()}
+
+# --- 1. 基础分词函数 ---
 def get_title_keywords(title):
-    # \b\w{3,}\b 匹配长度大于等于3的单词或数字
     words = re.findall(r'\b\w{3,}\b', str(title).lower())
-    
-    # 基础语法虚词
     stop_words = {'and', 'the', 'with', 'for', 'based', 'from', 'this', 'that', 'these', 'those'}
-    
-    # 标题内部去重
     return list(set([w for w in words if w not in stop_words]))
 
 # --- 2. 核心分析逻辑 ---
-def analyze_market_echo(df):
-    # 基础列名校验
-    required_cols = ['ASIN', 'Title', 'Review Content']
-    if not all(col in df.columns for col in required_cols):
-        st.error(f"数据缺失关键列，请确保文件包含: {required_cols}")
-        return pd.DataFrame(), 0, 0
 
-    # 预处理缺失值
-    df['Title'] = df['Title'].fillna('')
-    df['Review Content'] = df['Review Content'].fillna('')
+def perform_analysis(df, mode="exact"):
+    """
+    mode: "exact" 使用自动生成的 top_kws 进行词对词匹配
+    mode: "fuzzy" 使用 EXTENDED_MAPPING 进行语义丛匹配
+    """
+    df['Title'] = df['Title'].fillna('').astype(str).str.lower()
+    df['Review Content'] = df['Review Content'].fillna('').astype(str).str.lower()
     
     total_asins = df['ASIN'].nunique()
-    total_reviews = len(df)
-
-    # --- A. 标题端统计 (按 ASIN 提取关键词) ---
     asin_level_df = df.groupby('ASIN')['Title'].first().reset_index()
-    asin_level_df['kw_list'] = asin_level_df['Title'].apply(get_title_keywords)
-    
-    all_title_words = []
-    for ks in asin_level_df['kw_list']:
-        all_title_words.extend(ks)
-    
-    kw_counts = Counter(all_title_words)
-    # 取标题中出现频率最高的前 100 个关键词作为分析对象
-    top_kws = [item[0] for item in kw_counts.most_common(100)]
+    asin_groups = {asin: group for asin, group in df.groupby('ASIN')}
 
-    # --- B. 核心分析循环 (精确匹配分析) ---
+    if mode == "exact":
+        asin_level_df['kw_list'] = asin_level_df['Title'].apply(get_title_keywords)
+        all_title_words = [w for ks in asin_level_df['kw_list'] for w in ks]
+        target_list = [item[0] for item in Counter(all_title_words).most_common(100)]
+    else:
+        target_list = list(CLEAN_MAPPING.keys())
+
     analysis_data = []
-    
-    for kw in top_kws:
-        # 1. 找到标题里包含该关键词的 ASIN 列表
-        # 使用 \b 确保精确匹配单词
-        pattern = fr'\b{re.escape(kw)}\b'
+
+    for key_word in target_list:
+        # 1. 锁定标题包含该词的 ASIN
+        title_pattern = fr'\b{re.escape(key_word)}\b'
+        relevant_asins = asin_level_df[asin_level_df['Title'].str.contains(title_pattern, na=False)]['ASIN'].tolist()
         
-        # 这里的 boolean mask 用于找出哪些 ASIN 的标题含此词
-        has_kw_mask = asin_level_df['Title'].str.contains(pattern, case=False, na=False)
-        relevant_asins = asin_level_df[has_kw_mask]['ASIN'].unique()
-        
-        title_mentions = len(relevant_asins) 
+        title_mentions = len(relevant_asins)
+        if title_mentions == 0: continue
+            
         title_penetration = (title_mentions / total_asins) * 100
         
-        # 2. 针对这些 ASIN 的评论进行分析
-        if title_mentions > 0:
-            # 筛选出属于这些 ASIN 的所有评论行
-            relevant_reviews_df = df[df['ASIN'].isin(relevant_asins)]
-            specific_total_reviews = len(relevant_reviews_df) # 局部评论总数 (分母)
-            
-            # 在这些评论中，提到该关键词的次数 (分子)
-            review_mentions = relevant_reviews_df['Review Content'].str.contains(pattern, case=False, na=False).sum()
-            
-            # 计算回声率：提到的评论数 / 该卖点关联的总评论数
-            review_echo_rate = (review_mentions / specific_total_reviews) * 100
-        else:
-            review_mentions = 0
-            review_echo_rate = 0
-            specific_total_reviews = 0
+        # 2. 锁定评论子集
+        relevant_reviews_series = pd.concat([asin_groups[a]['Review Content'] for a in relevant_asins])
+        specific_total_reviews = len(relevant_reviews_series)
 
-        # 计算心智转化比 (分母保护)
-        conversion_ratio = round(review_echo_rate / title_penetration, 2) if title_penetration > 0 else 0
+        # 3. 确定匹配模式
+        if mode == "exact":
+            match_pattern = title_pattern
+            display_name = key_word
+            extra_info = "-"
+        else:
+            synonyms = CLEAN_MAPPING[key_word]
+            match_pattern = r'\b(' + '|'.join([re.escape(s) for s in synonyms]) + r')\b'
+            display_name = key_word
+            extra_info = ", ".join(synonyms[:3]) + "..."
+
+        # 4. 计算指标
+        review_mentions = relevant_reviews_series.str.contains(match_pattern, na=False).sum()
+        review_echo_rate = (review_mentions / specific_total_reviews * 100) if specific_total_reviews > 0 else 0
+        conversion = review_echo_rate / title_penetration if title_penetration > 0 else 0
 
         analysis_data.append({
-            "关键词": kw,
-            "标题提及ASIN数": title_mentions,
+            "关键词/卖点": display_name,
+            "语义涵盖范围": extra_info,
+            "标题ASIN数": title_mentions,
             "标题渗透率 (%)": round(title_penetration, 2),
-            "关联评论总数 (分母)": specific_total_reviews,
-            "评论提及次数 (分子)": review_mentions,
+            "关联评论总数": specific_total_reviews,
+            "评论提及次数": review_mentions,
             "评论回声率 (%)": round(review_echo_rate, 2),
-            "心智转化比": conversion_ratio
+            "心智转化比": round(conversion, 2)
         })
 
-    result_df = pd.DataFrame(analysis_data)
-    return result_df, total_asins, total_reviews
+    return pd.DataFrame(analysis_data).sort_values("评论回声率 (%)", ascending=False)
 
-# --- 3. Streamlit 展示层 ---
-st.title("🎯 卖点回声分析看板 (精确匹配版)")
-st.markdown("""
-通过对比 **商家宣传（标题关键词）** 与 **用户复述（评论关键词）**，识别真实的卖点响应。
-- **标题渗透率**: 市场上有多大比例的 ASIN 在标题里提到了这个词。
-- **评论回声率**: 在**提到了该词的商品**中，有多大比例的评论也提到了这个词。
-""")
+# --- 3. 展示层 ---
+st.title("🎯 酒精笔卖点渗透看板 (全效合一版)")
 
-uploaded_file = st.file_uploader("上传您的数据文件 (Excel 或 CSV)", type=['csv', 'xlsx'])
+uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 'xlsx'])
 
 if uploaded_file:
-    if uploaded_file.name.endswith('.csv'):
-        df_input = pd.read_csv(uploaded_file)
-    else:
-        df_input = pd.read_excel(uploaded_file)
-    
-    res_df, total_a, total_r = analyze_market_echo(df_input)
-    
-    if not res_df.empty:
-        m1, m2 = st.columns(2)
-        m1.metric("分析 ASIN 总数", total_a)
-        m2.metric("分析评论总条数", total_r)
+    df_input = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+    total_a = df_input['ASIN'].nunique()
+    total_r = len(df_input)
 
-        st.divider()
+    st.sidebar.metric("分析 ASIN 总数", total_a)
+    st.sidebar.metric("分析评论总条数", total_r)
 
-        st.subheader("📊 关键词卖点转化清单")
-        
-        # 默认按评论回声率排序
-        res_df = res_df.sort_values("评论回声率 (%)", ascending=False)
-        
-        # 背景渐变美化
-        styled_df = res_df.style.background_gradient(
-            subset=['标题渗透率 (%)', '评论回声率 (%)', '心智转化比'], 
-            cmap='GnBu'
-        )
-        
-        st.dataframe(styled_df, use_container_width=True)
+    # 使用标签页区分两种模式
+    tab1, tab2 = st.tabs(["🔍 词频精确匹配 (系统自动发现)", "🧬 语义模糊匹配 (基于自定义词库)"])
 
+    with tab1:
+        st.markdown("🔍 **逻辑：** 自动提取标题高频词，并在评论中寻找**一模一样**的单词。")
+        res_exact = perform_analysis(df_input, mode="exact")
+        st.dataframe(res_exact.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='YlGnBu'), use_container_width=True)
+
+    with tab2:
+        st.markdown("🧬 **逻辑：** 当标题出现核心词时，在评论中寻找其**所有同义词**（如：标题有dual，评论有double也算命中）。")
+        res_fuzzy = perform_analysis(df_input, mode="fuzzy")
+        st.dataframe(res_fuzzy.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='OrRd'), use_container_width=True)
 else:
-    st.warning("👈 请先上传数据文件进行分析。")
+    st.info("请在上方上传文件以开始分析。")
