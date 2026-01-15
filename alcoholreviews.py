@@ -343,7 +343,7 @@ SENTIMENT_LIB = {
     },
     "copic": "ohuhu", "caliart": "ohuhu", "soucolor": "ohuhu", 
     "taotree": "ohuhu", "bianyo": "ohuhu", "shuttle": "ohuhu", "sfaih": "ohuhu", 
-    "wellokb": "ohuhu", "memoffice": "ohuhu", "anymark": "ohuhu", "honolulu", "oahu",
+    "wellokb": "ohuhu", "memoffice": "ohuhu", "anymark": "ohuhu", "honolulu": "ohuhu", "oahu": "ohuhu",
     
     # 12. 教育场景
     "kids": {
