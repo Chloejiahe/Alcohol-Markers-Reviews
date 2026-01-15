@@ -7,11 +7,16 @@ import nltk
 from nltk.tokenize import sent_tokenize
 import plotly.express as px  # 用于画NSS图表
 
-# 首次运行需要下载分句训练数据
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+# 自动处理分句器所需的数据包
+def load_nltk_resources():
+    resources = ['punkt', 'punkt_tab'] # 兼容新旧版本的资源包
+    for res in resources:
+        try:
+            nltk.data.find(f'tokenizers/{res}')
+        except LookupError:
+            nltk.download(res)
+
+load_nltk_resources()
 
 # 设置页面宽度和标题
 st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
