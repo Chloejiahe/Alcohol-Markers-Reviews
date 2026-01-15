@@ -595,6 +595,7 @@ SENTIMENT_LIB = {
             'box was crushed (not giftable)', 'not worth the price for a stuffer'
         ]
     },
+}
 
 CLEAN_MAPPING = {str(k).lower(): [str(i).lower() for i in v] for k, v in EXTENDED_MAPPING.items()}
 
