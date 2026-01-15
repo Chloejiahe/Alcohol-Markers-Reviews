@@ -21,67 +21,67 @@ load_nltk_resources()
 # 设置页面宽度和标题
 st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
 
-# --- 核心计算函数 (修复了计数逻辑) ---
 @st.cache_data
 def calculate_nss_logic(df, mapping, sentiment_lib):
-    # --- 1. 预处理：将评论统一分句并转为小写 (关键提速步) ---
     all_sentences = []
     for review in df['Review Content'].fillna("").astype(str):
         all_sentences.extend(sent_tokenize(review.lower()))
-    
-    # --- 2. 预编译正则表达式 (避免在循环中重复解析字符串) ---
-    patterns = {
-        cat: re.compile(r'(' + '|'.join([re.escape(k) for k in keywords]) + r')')
-        for cat, keywords in mapping.items()
-    }
-    
-    # --- 3. 情感词库 Set 化 (将 List 转为 Set，查找速度从 O(n) 变为 O(1)) ---
+
+    # 定义常见的否定词
+    negations = {'not', 'no', 'never', 'bad', "don't", "doesn't", "isn't", "aren't"}
+
+    patterns = {cat: re.compile(r'(' + '|'.join([re.escape(k) for k in keywords]) + r')')
+                for cat, keywords in mapping.items()}
+
     processed_lib = {}
     for cat in mapping.keys():
+        # ... (保留你原来的 Set 化逻辑) ...
+        # 确保 lib_data 能够正确处理中文键名
         target_key = cat
         while isinstance(sentiment_lib.get(target_key), str):
             target_key = sentiment_lib[target_key]
         lib_data = sentiment_lib.get(target_key, {"正面": [], "负面": []})
-        processed_lib[cat] = {
-            "pos": set(lib_data["正面"]),
-            "neg": set(lib_data["负面"])
-        }
+        processed_lib[cat] = {"pos": set(lib_data["正面"]), "neg": set(lib_data["负面"])}
 
     results = []
-    
-    # --- 4. 核心计算：减少嵌套，优化匹配 ---
     for category, pattern in patterns.items():
-        pos_count = 0
-        neg_count = 0
-        total_hit_sentences = 0
-        
+        pos_count, neg_count, total_hit = 0, 0, 0
         lib = processed_lib[category]
-        
+
         for sentence in all_sentences:
-            if pattern.search(sentence): # 使用预编译的正则 search
-                total_hit_sentences += 1
+            if pattern.search(sentence):
+                total_hit += 1
                 score = 0
                 
-                # 优先匹配强情感词 (Set 查找极快)
-                if any(p in sentence for p in lib["pos"]): 
-                    score = 1
-                elif any(n in sentence for n in lib["neg"]): 
+                # 1. 检查是否存在否定含义 (简单前缀法)
+                words = set(sentence.split())
+                has_negation = not words.isdisjoint(negations)
+
+                # 2. 匹配负面词库 (提高负面优先级)
+                if any(n in sentence for n in lib["neg"]):
                     score = -1
+                # 3. 匹配正面词库
+                elif any(p in sentence for p in lib["pos"]):
+                    # 如果有否定词，正面词变负面（如 not great）
+                    score = -1 if has_negation else 1
                 
-                # 兜底逻辑   
+                # 4. 恢复 TextBlob 兜底 (可选)
+                if score == 0:
+                    pol = TextBlob(sentence).sentiment.polarity
+                    if pol > 0.2: score = 1
+                    elif pol < -0.1: score = -1 # 降低负面阈值，捕捉更多不满
+
                 if score == 1: pos_count += 1
                 elif score == -1: neg_count += 1
-        
-        if total_hit_sentences > 0:
-            nss = (pos_count - neg_count) / total_hit_sentences
+
+        if total_hit > 0:
             results.append({
                 "维度": category,
-                "提及句子数": total_hit_sentences,
+                "提及句子数": total_hit,
                 "正面次数": pos_count,
                 "负面次数": neg_count,
-                "NSS分数": round(nss, 3)
+                "NSS分数": round((pos_count - neg_count) / total_hit, 3)
             })
-            
     return pd.DataFrame(results)
     
 # --- 0. 配置词库 ---
