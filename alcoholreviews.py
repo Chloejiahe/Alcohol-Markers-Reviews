@@ -216,7 +216,7 @@ SENTIMENT_LIB = {
     
     # 5. 色彩特性类 (核心：blending)
     "blending": {
-        "正面": ['easy to blend', 'blends well', 'blendable', 'effortless blending', 'seamless blend', 'smooth gradient', 'layers nicely', 'reactivates well'，'colorless blender works great', 'perfect for fixing mistakes', 
+        "正面": ['easy to blend', 'blends well', 'blendable', 'effortless blending', 'seamless blend', 'smooth gradient', 'layers nicely', 'reactivates well', 'colorless blender works great', 'perfect for fixing mistakes', 
             'cleans up edges', 'adds great highlights', 'moist and useful', 'great for fading out'],
         "负面": ["doesn't blend", 'difficult to blend', 'hard to blend', 'impossible to blend', 'gets muddy', 'pills paper', 'lifts underlying ink', 'colorless pen is dry', 'blender is useless', 'leaves water marks', 
             'doesn’t move the color']
