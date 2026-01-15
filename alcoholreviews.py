@@ -705,7 +705,7 @@ else:
     st.header("🎭 卖点口碑深度分析 (NSS)")
     
     with st.spinner('正在计算句子级情感归因...'):
-        nss_results = calculate_nss_logic(df, EXTENDED_MAPPING, SENTIMENT_LIB)
+        nss_results = calculate_nss_logic(df_input, EXTENDED_MAPPING, SENTIMENT_LIB)
     
     if not nss_results.empty:
         # 排序：看谁口碑最烂
