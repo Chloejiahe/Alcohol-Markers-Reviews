@@ -690,46 +690,58 @@ if uploaded_file:
 else:
     st.info("请在上方上传文件以开始分析。")
 
-    
-# --- 独立板块：NSS 情感分析 (包含在 if uploaded_file 之内) ---
-    st.divider()
-    st.header("🎭 卖点口碑深度分析 (NSS)")
-    
-    with st.spinner('正在计算句子级情感归因...'):
-        # 确保函数内部处理了 review_body 的空值
-        nss_results = calculate_nss_logic(df_input, EXTENDED_MAPPING, SENTIMENT_LIB)
-    
-    if nss_results is not None and not nss_results.empty:
-        nss_results = nss_results.sort_values("NSS分数", ascending=True)
-        
-        col_fig, col_table = st.columns([3, 2])
-        
-        with col_fig:
-            # 只取 NSS 分数最极端的部分展示（防止维度太多图表太挤）
-            display_df = pd.concat([nss_results.head(10), nss_results.tail(10)]).drop_duplicates()
-            fig = px.bar(
-                display_df, 
-                x="NSS分数", 
-                y="维度", 
-                orientation='h',
-                color="NSS分数",
-                color_continuous_scale='RdYlGn',
-                range_color=[-1, 1],
-                title="重点卖点口碑净值 (NSS)"
-            )
-            fig.add_vline(x=0, line_dash="dash", line_color="black")
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with col_table:
-            st.subheader("明细数据")
-            st.dataframe(
-                nss_results.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
-                height=400, use_container_width=True
-            )
 
-        # 重点预警
-        critical_issues = nss_results[nss_results['NSS分数'] < 0]['维度'].tolist()
-        if critical_issues:
-            st.error(f"⚠️ **负面预警**：以下维度口碑为负，建议优先检查：{', '.join(critical_issues)}")
-    else:
-        st.warning("未能匹配到词库中的卖点，请检查评论内容或扩充 EXTENDED_MAPPING。")
+# --- 3. 展示层 ---
+st.title("🎯 酒精笔卖点渗透看板 (全效合一版)")
+
+uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 'xlsx'])
+
+
+# --- 独立板块：NSS 情感分析 (包含在 if uploaded_file 之内) ---
+        st.divider()
+        st.header("🎭 卖点口碑深度分析 (NSS)")
+        
+        with st.spinner('正在计算句子级情感归因...'):
+            # 确保函数内部处理了 review_body 的空值
+            nss_results = calculate_nss_logic(df_input, EXTENDED_MAPPING, SENTIMENT_LIB)
+        
+        if nss_results is not None and not nss_results.empty:
+            nss_results = nss_results.sort_values("NSS分数", ascending=True)
+            
+            col_fig, col_table = st.columns([3, 2])
+            
+            with col_fig:
+                # 只取 NSS 分数最极端的部分展示（防止维度太多图表太挤）
+                display_df = pd.concat([nss_results.head(10), nss_results.tail(10)]).drop_duplicates()
+                fig = px.bar(
+                    display_df, 
+                    x="NSS分数", 
+                    y="维度", 
+                    orientation='h',
+                    color="NSS分数",
+                    color_continuous_scale='RdYlGn',
+                    range_color=[-1, 1],
+                    title="重点卖点口碑净值 (NSS)"
+                )
+                fig.add_vline(x=0, line_dash="dash", line_color="black")
+                st.plotly_chart(fig, use_container_width=True)
+                
+            with col_table:
+                st.subheader("明细数据")
+                st.dataframe(
+                    nss_results.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
+                    height=400, use_container_width=True
+                )
+
+            # 重点预警
+            critical_issues = nss_results[nss_results['NSS分数'] < 0]['维度'].tolist()
+            if critical_issues:
+                st.error(f"⚠️ **负面预警**：以下维度口碑为负，建议优先检查：{', '.join(critical_issues)}")
+        else:
+            st.warning("未能匹配到词库中的卖点，请检查评论内容或扩充 EXTENDED_MAPPING。")
+    
+    except Exception as e:
+        st.error(f"处理文件时出错: {str(e)}")
+        st.info("请确保您的数据文件包含以下列：ASIN, Title, Review Content (或类似名称)")
+else:
+    st.info("请在上方上传文件以开始分析。")
