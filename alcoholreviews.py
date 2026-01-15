@@ -22,6 +22,7 @@ load_nltk_resources()
 st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
 
 # --- 核心计算函数 (修复了计数逻辑) ---
+@st.cache_data
 def calculate_nss_logic(df, mapping, sentiment_lib):
     results = []
     
