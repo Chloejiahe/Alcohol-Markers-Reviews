@@ -665,44 +665,42 @@ def perform_analysis(df, mode="exact"):
 # --- 3. 展示层 ---
 st.title("🎯 酒精笔卖点渗透看板 (全效合一版)")
 
+# 整个脚本只保留一个 file_uploader
 uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 'xlsx'])
 
 if uploaded_file:
-    df_input = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-    total_a = df_input['ASIN'].nunique()
-    total_r = len(df_input)
+    try:
+        # 1. 数据读取逻辑
+        if uploaded_file.name.endswith('.csv'):
+            df_input = pd.read_csv(uploaded_file)
+        else:
+            df_input = pd.read_excel(uploaded_file)
 
-    st.sidebar.metric("分析 ASIN 总数", total_a)
-    st.sidebar.metric("分析评论总条数", total_r)
+        # 基础数据统计
+        total_a = df_input['ASIN'].nunique()
+        total_r = len(df_input)
+        st.sidebar.metric("分析 ASIN 总数", total_a)
+        st.sidebar.metric("分析评论总条数", total_r)
 
-    # 使用标签页区分两种模式
-    tab1, tab2 = st.tabs(["🔍 词频精确匹配 (系统自动发现)", "🧬 语义模糊匹配 (基于自定义词库)"])
+        # 2. 词频匹配板块 (Tab 模式)
+        tab1, tab2 = st.tabs(["🔍 词频精确匹配", "🧬 语义模糊匹配"])
 
-    with tab1:
-        st.markdown("🔍 **逻辑：** 自动提取标题高频词，并在评论中寻找**一模一样**的单词。")
-        res_exact = perform_analysis(df_input, mode="exact")
-        st.dataframe(res_exact.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='YlGnBu'), use_container_width=True)
+        with tab1:
+            st.markdown("🔍 **逻辑：** 自动提取标题高频词，匹配评论原文。")
+            res_exact = perform_analysis(df_input, mode="exact")
+            st.dataframe(res_exact.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='YlGnBu'), use_container_width=True)
 
-    with tab2:
-        st.markdown("🧬 **逻辑：** 当标题出现核心词时，在评论中寻找其**所有同义词**（如：标题有dual，评论有double也算命中）。")
-        res_fuzzy = perform_analysis(df_input, mode="fuzzy")
-        st.dataframe(res_fuzzy.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='OrRd'), use_container_width=True)
-else:
-    st.info("请在上方上传文件以开始分析。")
+        with tab2:
+            st.markdown("🧬 **逻辑：** 基于同义词词库进行模糊匹配渗透。")
+            res_fuzzy = perform_analysis(df_input, mode="fuzzy")
+            st.dataframe(res_fuzzy.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='OrRd'), use_container_width=True)
 
-
-# --- 3. 展示层 ---
-st.title("🎯 酒精笔卖点渗透看板 (全效合一版)")
-
-uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 'xlsx'])
-
-
-# --- 独立板块：NSS 情感分析 (包含在 if uploaded_file 之内) ---
+        # 3. 情感分析板块 (必须保持在这里，属于 if uploaded_file 内部)
         st.divider()
         st.header("🎭 卖点口碑深度分析 (NSS)")
         
         with st.spinner('正在计算句子级情感归因...'):
-            # 确保函数内部处理了 review_body 的空值
+            # 调用你定义的函数
             nss_results = calculate_nss_logic(df_input, EXTENDED_MAPPING, SENTIMENT_LIB)
         
         if nss_results is not None and not nss_results.empty:
@@ -711,7 +709,7 @@ uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 
             col_fig, col_table = st.columns([3, 2])
             
             with col_fig:
-                # 只取 NSS 分数最极端的部分展示（防止维度太多图表太挤）
+                # 选取代表性维度
                 display_df = pd.concat([nss_results.head(10), nss_results.tail(10)]).drop_duplicates()
                 fig = px.bar(
                     display_df, 
@@ -733,15 +731,17 @@ uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 
                     height=400, use_container_width=True
                 )
 
-            # 重点预警
+            # 负面预警
             critical_issues = nss_results[nss_results['NSS分数'] < 0]['维度'].tolist()
             if critical_issues:
                 st.error(f"⚠️ **负面预警**：以下维度口碑为负，建议优先检查：{', '.join(critical_issues)}")
         else:
-            st.warning("未能匹配到词库中的卖点，请检查评论内容或扩充 EXTENDED_MAPPING。")
-    
+            st.warning("未能匹配到词库中的卖点，请扩充 EXTENDED_MAPPING 或检查评论列。")
+
     except Exception as e:
         st.error(f"处理文件时出错: {str(e)}")
-        st.info("请确保您的数据文件包含以下列：ASIN, Title, Review Content (或类似名称)")
+        st.info("提示：请确保 CSV/Excel 包含 ASIN 和 review_body (评论内容) 列。")
+
 else:
-    st.info("请在上方上传文件以开始分析。")
+    # 没有任何文件上传时显示这个提示
+    st.info("👋 请在上方上传数据文件以开始分析。")
