@@ -68,12 +68,7 @@ def calculate_nss_logic(df, mapping, sentiment_lib):
                 elif any(n in sentence for n in lib["neg"]): 
                     score = -1
                 
-                # 兜底逻辑
-                if score == 0:
-                    polarity = TextBlob(sentence).sentiment.polarity
-                    if polarity > 0.1: score = 1
-                    elif polarity < -0.1: score = -1
-                
+                # 兜底逻辑   
                 if score == 1: pos_count += 1
                 elif score == -1: neg_count += 1
         
