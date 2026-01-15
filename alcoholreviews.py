@@ -32,7 +32,7 @@ def calculate_nss_logic(df, mapping, sentiment_lib):
         
         kw_pattern = r'(' + '|'.join([re.escape(k) for k in keywords]) + r')'
         
-        for review in df['Review_Content'].fillna("").astype(str):
+        for review in df['Review Content'].fillna("").astype(str):
             sentences = sent_tokenize(review.lower())
             
             for sentence in sentences:
