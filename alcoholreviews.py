@@ -15,60 +15,51 @@ except LookupError:
 # 设置页面宽度和标题
 st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
 
+# --- 核心计算函数 (修复了计数逻辑) ---
 def calculate_nss_logic(df, mapping, sentiment_lib):
-    from nltk.tokenize import sent_tokenize
-    
     results = []
     
-    # 遍历每个卖点维度
     for category, keywords in mapping.items():
-        # 获取对应的情感库（处理重定向逻辑）
+        # 处理重定向
         target_key = category
         while isinstance(sentiment_lib.get(target_key), str):
             target_key = sentiment_lib[target_key]
         lib_data = sentiment_lib.get(target_key, {"正面": [], "负面": []})
         
-        pos_mentions = 0
-        neg_mentions = 0
-        total_mentions = 0
+        pos_count = 0
+        neg_count = 0
+        total_hit_sentences = 0 # 改为统计命中关键词的句子总数
         
-        # 预编译正则，提高效率
-        kw_pattern = r'\b(' + '|'.join([re.escape(k) for k in keywords]) + r')\b'
+        kw_pattern = r'(' + '|'.join([re.escape(k) for k in keywords]) + r')'
         
-        # 遍历每一条评论
-        for review in df['review_body'].astype(str):
+        for review in df['review_body'].fillna("").astype(str):
             sentences = sent_tokenize(review.lower())
-            found_in_review = False
             
             for sentence in sentences:
                 if re.search(kw_pattern, sentence):
-                    # 只要句子里有关键词，就算一次提及
-                    if not found_in_review:
-                        total_mentions += 1
-                        found_in_review = True
+                    total_hit_sentences += 1 # 发现一个命中的句子
                     
-                    # 情感归因判断
                     score = 0
                     # 1. 强情感词匹配
                     if any(p in sentence for p in lib_data["正面"]): score = 1
                     elif any(n in sentence for n in lib_data["负面"]): score = -1
                     
-                    # 2. 兜底：如果没有强情感词，用 TextBlob
+                    # 2. 兜底
                     if score == 0:
                         polarity = TextBlob(sentence).sentiment.polarity
                         if polarity > 0.1: score = 1
                         elif polarity < -0.1: score = -1
                     
-                    if score == 1: pos_mentions += 1
-                    elif score == -1: neg_mentions += 1
+                    if score == 1: pos_count += 1
+                    elif score == -1: neg_count += 1
         
-        if total_mentions > 0:
-            nss = (pos_mentions - neg_mentions) / total_mentions
+        if total_hit_sentences > 0:
+            nss = (pos_count - neg_count) / total_hit_sentences
             results.append({
                 "维度": category,
-                "总提及数": total_mentions,
-                "正面提及": pos_mentions,
-                "负面提及": neg_mentions,
+                "提及句子数": total_hit_sentences,
+                "正面次数": pos_count,
+                "负面次数": neg_count,
                 "NSS分数": round(nss, 3)
             })
             
@@ -700,44 +691,45 @@ else:
     st.info("请在上方上传文件以开始分析。")
 
     
-# --- 第二板块：NSS 情感分析 (独立板块) ---
+# --- 独立板块：NSS 情感分析 (包含在 if uploaded_file 之内) ---
     st.divider()
     st.header("🎭 卖点口碑深度分析 (NSS)")
     
     with st.spinner('正在计算句子级情感归因...'):
+        # 确保函数内部处理了 review_body 的空值
         nss_results = calculate_nss_logic(df_input, EXTENDED_MAPPING, SENTIMENT_LIB)
     
-    if not nss_results.empty:
-        # 排序：看谁口碑最烂
+    if nss_results is not None and not nss_results.empty:
         nss_results = nss_results.sort_values("NSS分数", ascending=True)
         
         col_fig, col_table = st.columns([3, 2])
         
         with col_fig:
-            # 绘制水平条形图
+            # 只取 NSS 分数最极端的部分展示（防止维度太多图表太挤）
+            display_df = pd.concat([nss_results.head(10), nss_results.tail(10)]).drop_duplicates()
             fig = px.bar(
-                nss_results.tail(15), # 展示口碑前15或末15
+                display_df, 
                 x="NSS分数", 
                 y="维度", 
                 orientation='h',
                 color="NSS分数",
-                color_continuous_scale='RdYlGn', # 红黄绿渐变
+                color_continuous_scale='RdYlGn',
                 range_color=[-1, 1],
-                title="各卖点口碑净值 (NSS)"
+                title="重点卖点口碑净值 (NSS)"
             )
             fig.add_vline(x=0, line_dash="dash", line_color="black")
             st.plotly_chart(fig, use_container_width=True)
             
         with col_table:
             st.subheader("明细数据")
-            # 使用颜色高亮表格
             st.dataframe(
                 nss_results.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
-                height=400
+                height=400, use_container_width=True
             )
-            st.caption("注：NSS = (正面提及数 - 负面提及数) / 总提及数。范围 -1 到 1。")
 
         # 重点预警
         critical_issues = nss_results[nss_results['NSS分数'] < 0]['维度'].tolist()
         if critical_issues:
             st.error(f"⚠️ **负面预警**：以下维度口碑为负，建议优先检查：{', '.join(critical_issues)}")
+    else:
+        st.warning("未能匹配到词库中的卖点，请检查评论内容或扩充 EXTENDED_MAPPING。")
