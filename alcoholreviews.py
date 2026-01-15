@@ -4,6 +4,7 @@ import re
 from collections import Counter
 from textblob import TextBlob
 import nltk
+from nltk.tokenize import sent_tokenize
 import plotly.express as px  # 用于画NSS图表
 
 # 首次运行需要下载分句训练数据
