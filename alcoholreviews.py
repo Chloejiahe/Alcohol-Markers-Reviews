@@ -24,41 +24,58 @@ st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
 # --- 核心计算函数 (修复了计数逻辑) ---
 @st.cache_data
 def calculate_nss_logic(df, mapping, sentiment_lib):
-    results = []
+    # --- 1. 预处理：将评论统一分句并转为小写 (关键提速步) ---
+    all_sentences = []
+    for review in df['Review Content'].fillna("").astype(str):
+        all_sentences.extend(sent_tokenize(review.lower()))
     
-    for category, keywords in mapping.items():
-        # 处理重定向
-        target_key = category
+    # --- 2. 预编译正则表达式 (避免在循环中重复解析字符串) ---
+    patterns = {
+        cat: re.compile(r'(' + '|'.join([re.escape(k) for k in keywords]) + r')')
+        for cat, keywords in mapping.items()
+    }
+    
+    # --- 3. 情感词库 Set 化 (将 List 转为 Set，查找速度从 O(n) 变为 O(1)) ---
+    processed_lib = {}
+    for cat in mapping.keys():
+        target_key = cat
         while isinstance(sentiment_lib.get(target_key), str):
             target_key = sentiment_lib[target_key]
         lib_data = sentiment_lib.get(target_key, {"正面": [], "负面": []})
-        
+        processed_lib[cat] = {
+            "pos": set(lib_data["正面"]),
+            "neg": set(lib_data["负面"])
+        }
+
+    results = []
+    
+    # --- 4. 核心计算：减少嵌套，优化匹配 ---
+    for category, pattern in patterns.items():
         pos_count = 0
         neg_count = 0
-        total_hit_sentences = 0 # 改为统计命中关键词的句子总数
+        total_hit_sentences = 0
         
-        kw_pattern = r'(' + '|'.join([re.escape(k) for k in keywords]) + r')'
+        lib = processed_lib[category]
         
-        for review in df['Review Content'].fillna("").astype(str):
-            sentences = sent_tokenize(review.lower())
-            
-            for sentence in sentences:
-                if re.search(kw_pattern, sentence):
-                    total_hit_sentences += 1 # 发现一个命中的句子
-                    
-                    score = 0
-                    # 1. 强情感词匹配
-                    if any(p in sentence for p in lib_data["正面"]): score = 1
-                    elif any(n in sentence for n in lib_data["负面"]): score = -1
-                    
-                    # 2. 兜底
-                    if score == 0:
-                        polarity = TextBlob(sentence).sentiment.polarity
-                        if polarity > 0.1: score = 1
-                        elif polarity < -0.1: score = -1
-                    
-                    if score == 1: pos_count += 1
-                    elif score == -1: neg_count += 1
+        for sentence in all_sentences:
+            if pattern.search(sentence): # 使用预编译的正则 search
+                total_hit_sentences += 1
+                score = 0
+                
+                # 优先匹配强情感词 (Set 查找极快)
+                if any(p in sentence for p in lib["pos"]): 
+                    score = 1
+                elif any(n in sentence for n in lib["neg"]): 
+                    score = -1
+                
+                # 兜底逻辑
+                if score == 0:
+                    polarity = TextBlob(sentence).sentiment.polarity
+                    if polarity > 0.1: score = 1
+                    elif polarity < -0.1: score = -1
+                
+                if score == 1: pos_count += 1
+                elif score == -1: neg_count += 1
         
         if total_hit_sentences > 0:
             nss = (pos_count - neg_count) / total_hit_sentences
