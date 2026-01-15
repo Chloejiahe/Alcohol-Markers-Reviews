@@ -95,19 +95,20 @@ EXTENDED_MAPPING = {
     "teen": ["teen", "teens", "teenager", "youth"],
     "aesthetic": ["aesthetic", "beautiful", "vibrant", "pretty"],
     "creators": ["creators", "creator", "artists"],
-    "pad": ["pad", "paper", "sketchbook", "cardstock"],
     "barrel": ["barrel", "handle", "hold", "grip", "shape"],
     "bonus": ["bonus", "extra", "free", "additional", "gift"],
     "series": ["series", "collection", "set"],
     "highlighters": ["highlighters", "highlighting", "neon", "bright"],
     "teens": ["teens", "teenager", "youth", "12-17"],
-    "easter": ["easter", "spring", "basket", "holiday"],
     "decorations": ["decorations", "decor", "craft", "diy"],
     "memoffice": ["memoffice", "brand"],
     "stuffers": ["stuffers", "fillers", "gift", "stocking"],
     "underlining": ["underlining", "underline", "highlight", "note taking"],
     "halloween": ["halloween", "spooky", "fall", "orange", "black"],
-    "eggs": ["eggs", "egg", "easter", "coloring"]
+    "highlighters": ["highlighters", "highlighting", "neon", "marker"],
+    "highlighter": ["highlighter", "highlighting", "neon", "marker"],
+    "bianyo": ["bianyo"],
+    "cozy": ["cozy", "comfortable", "warm", "homey"],
 }
 
 CLEAN_MAPPING = {str(k).lower(): [str(i).lower() for i in v] for k, v in EXTENDED_MAPPING.items()}
