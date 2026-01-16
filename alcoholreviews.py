@@ -823,13 +823,11 @@ if uploaded_file:
             st.plotly_chart(fig, use_container_width=True)
 
             # --- 3.2 数据明细表 ---
-            st.divider()
             st.subheader("📋 维度明细数据对照表")
             st.dataframe(display_df.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
                          height=400, use_container_width=True)
 
             # --- 3.3 月份口碑波动看板 (核心修复区) ---
-            st.divider() 
             st.subheader("📈 维度月份波动看板 (2023-2025)")
             
             if 'Month' in df_input.columns:
