@@ -21,22 +21,23 @@ load_nltk_resources()
 # 设置页面宽度和标题
 st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
 
+
 @st.cache_data
 def calculate_nss_logic(df, mapping, sentiment_lib):
     all_sentences = []
     for review in df['Review Content'].fillna("").astype(str):
         all_sentences.extend(sent_tokenize(review.lower()))
 
-    # 定义常见的否定词
-    negations = {'not', 'no', 'never', 'bad', "don't", "doesn't", "isn't", "aren't"}
+    # 1. 修改正则表达式生成逻辑：只匹配维度名称本身
+    # 使用 \b 确保是单词全匹配，避免 'ink' 匹配到 'pink'
+    patterns = {
+        cat: re.compile(rf'\b{re.escape(cat.lower())}\b') 
+        for cat in mapping.keys()
+    }
 
-    patterns = {cat: re.compile(r'(' + '|'.join([re.escape(k) for k in keywords]) + r')')
-                for cat, keywords in mapping.items()}
-
+    # 2. 情感库处理 (保持原有重定向逻辑，因为情感表达是可以通用的)
     processed_lib = {}
     for cat in mapping.keys():
-        # ... (保留你原来的 Set 化逻辑) ...
-        # 确保 lib_data 能够正确处理中文键名
         target_key = cat
         while isinstance(sentiment_lib.get(target_key), str):
             target_key = sentiment_lib[target_key]
@@ -44,32 +45,32 @@ def calculate_nss_logic(df, mapping, sentiment_lib):
         processed_lib[cat] = {"pos": set(lib_data["正面"]), "neg": set(lib_data["负面"])}
 
     results = []
+    # 3. 遍历每个维度
     for category, pattern in patterns.items():
         pos_count, neg_count, total_hit = 0, 0, 0
         lib = processed_lib[category]
-
+        
         for sentence in all_sentences:
+            # 只有当句子中出现了这个维度词本身（如 'marker'）才进入计算
             if pattern.search(sentence):
                 total_hit += 1
                 score = 0
                 
-                # 1. 检查是否存在否定含义 (简单前缀法)
-                words = set(sentence.split())
-                has_negation = not words.isdisjoint(negations)
+                # 判定否定逻辑
+                negations = {'not', 'no', 'never', 'bad', "don't", "doesn't"}
+                has_negation = any(neg in sentence for neg in negations)
 
-                # 2. 匹配负面词库 (提高负面优先级)
+                # 匹配该维度特有的情感词
                 if any(n in sentence for n in lib["neg"]):
                     score = -1
-                # 3. 匹配正面词库
                 elif any(p in sentence for p in lib["pos"]):
-                    # 如果有否定词，正面词变负面（如 not great）
                     score = -1 if has_negation else 1
                 
-                # 4. 恢复 TextBlob 兜底 (可选)
+                # TextBlob 兜底判定
                 if score == 0:
                     pol = TextBlob(sentence).sentiment.polarity
                     if pol > 0.2: score = 1
-                    elif pol < -0.1: score = -1 # 降低负面阈值，捕捉更多不满
+                    elif pol < -0.1: score = -1
 
                 if score == 1: pos_count += 1
                 elif score == -1: neg_count += 1
@@ -717,11 +718,14 @@ if uploaded_file:
         # 3. 情感分析板块 (必须保持在这里，属于 if uploaded_file 内部)
         st.divider()
         st.header("🎭 卖点口碑深度分析 (NSS)")
-        
+
         with st.spinner('正在计算句子级情感归因...'):
-            # 调用你定义的函数
-            nss_results = calculate_nss_logic(df_input, EXTENDED_MAPPING, SENTIMENT_LIB)
-        
+            # 核心修改：通过字典推导式，只取 Key 本身构造映射，实现精准匹配
+            PRECISE_MAPPING = {k: [k] for k in EXTENDED_MAPPING.keys()}
+      
+            # 将传给函数的参数改为 PRECISE_MAPPING
+            nss_results = calculate_nss_logic(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
+            
         if nss_results is not None and not nss_results.empty:
             nss_results = nss_results.sort_values("NSS分数", ascending=True)
             
