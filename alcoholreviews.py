@@ -923,7 +923,7 @@ if uploaded_file:
         st.info("💡 **逻辑**：基于评论中的身份词（如 kids, teen, retired）识别核心受众年龄段。")
 
         with st.spinner('正在提取年龄特征...'):
-            age_df = calculate_age_distribution(df_input, AGE_DEMOGRAPHICS_LIB)
+            age_results = calculate_age_distribution(df_input, AGE_DEMOGRAPHICS_LIB)
             
         if not age_results.empty:
             # ✅ 关键改动：在这里增加一个独立的下拉框，使用唯一的 key
@@ -949,7 +949,7 @@ if uploaded_file:
                     y="年龄段",
                     orientation='h',
                     text="占比 (%)",
-                    title=age_title,
+                    title=age_plot_title,
                     color="年龄段",
                     color_discrete_sequence=px.colors.qualitative.Pastel
                 )
