@@ -186,7 +186,7 @@ EXTENDED_MAPPING = {
     "highlighter": ["highlighter", "highlighting", "neon", "marker"],
     "bianyo": ["bianyo"],
     "cozy": ["cozy", "comfortable", "warm", "homey"],
-    "easter": ["easter" "easter holiday"],
+    "easter": ["easter", "easter holiday"],
     "eggs": ["eggs", "egg"]
 }
 
