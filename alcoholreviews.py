@@ -985,6 +985,51 @@ if uploaded_file:
                 st.warning(f"ASIN: {age_selected_asin} 暂无明显的年龄相关特征数据。")
         else:
             st.warning("当前评论数据中未发现明显的年龄标签词。")
+        
+        # --- 5. BS下没有标kid的前10个ASIN的儿童使用人群分析 ---
+
+        st.divider()
+        st.header("🧒 BS非kid标前10 ASIN儿童使用占比分析")
+        st.info("💡 **逻辑**：分析BS下没有标注'kid'的前10个ASIN，计算每个ASIN评论中儿童使用人群的占比。")
+
+        # top10产品
+        top10_non_kid_asins = [
+            '',  # 请替换为实际的ASIN
+            'B0BG7118BK',
+            'B01GRF7NRY',
+            'B073TW8QHV',
+            'B07NRB5G3Q',
+            'B07RSQXSGY',
+            'B07VK1G863',
+            'B0BW87BYSN',
+            'B0C8HP7PF1',
+            'B0D7YTZNRF'
+        ]
+
+        # 简单调出数据
+        if 'age_results' in locals() and not age_results.empty:
+            # 过滤出top10 ASIN的数据
+            top10_data = age_results[age_results['ASIN'].isin(top10_non_kid_asins)]
+    
+            # 专门看儿童占比
+            child_data = top10_data[top10_data['年龄段'] == "儿童/幼儿 (0-12岁)"]
+    
+            if not child_data.empty:
+                # 简单表格展示
+                st.dataframe(child_data[["ASIN", "年龄段", "提及评论数", "占比 (%)"]]
+                             .sort_values("占比 (%)", ascending=False)
+                             .reset_index(drop=True))
+        
+                # 简单图表
+                fig = px.bar(child_data, x='ASIN', y='占比 (%)', 
+                             title='Top10 ASIN儿童使用占比',
+                             text='占比 (%)')
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("没有找到儿童占比数据")
+        else:
+            st.warning("请先运行年龄画像分析板块")
+
             
     except Exception as e:
         st.error(f"处理文件时出错: {str(e)}")
