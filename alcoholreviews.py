@@ -924,16 +924,22 @@ if uploaded_file:
 
         with st.spinner('正在提取年龄特征...'):
             age_df = calculate_age_distribution(df_input, AGE_DEMOGRAPHICS_LIB)
-
-        if not age_df.empty:
-            # 自动同步上方选中的 selected_asin
-            if selected_asin == "全部":
-                display_age = age_df.groupby("年龄段")["提及次数"].sum().reset_index()
-                display_age["占比 (%)"] = (display_age["提及次数"] / display_age["提及次数"].sum() * 100).round(1)
-                age_title = "全品类受众年龄分布"
+            
+        if not age_results.empty:
+            # ✅ 关键改动：在这里增加一个独立的下拉框，使用唯一的 key
+            age_asins = ["全部"] + sorted(age_results['ASIN'].unique().tolist())
+            # 我们给这个 selectbox 起个新名字叫 age_selected_asin，并给它唯一的 key
+            age_selected_asin = st.selectbox("🎯 选择要查看年龄画像的 ASIN：", age_asins, key="age_selector_unique")
+    
+            # 后面所有的判断都改用 age_selected_asin
+            if age_selected_asin == "全部":
+                display_age = age_results.groupby("年龄段")["提及次数"].sum().reset_index()
+                total_hits = display_age["提及次数"].sum()
+                display_age["占比 (%)"] = (display_age["提及次数"] / total_hits * 100).round(1)
+                age_plot_title = "全品类受众年龄分布"
             else:
-                display_age = age_df[age_df['ASIN'] == selected_asin]
-                age_title = f"ASIN: {selected_asin} 受众年龄画像"
+                display_age = age_results[age_results['ASIN'] == age_selected_asin]
+                age_plot_title = f"ASIN: {age_selected_asin} 受众年龄画像"    
 
             if not display_age.empty:
                 # 绘图：使用漏斗图或水平条形图，清晰展示层级
