@@ -712,6 +712,9 @@ if uploaded_file:
         st.sidebar.metric("分析评论总条数", total_r)
 
         # 2. 词频匹配板块 (Tab 模式)
+        st.header("📈 营销心智转化分析 (Marketing Consistency)")
+        st.info("💡 **说明**：此板块分析“文案一致性”。只有当 ASIN 的**标题**提到了该关键词，我们才去统计其评论回声。")
+        
         tab1, tab2 = st.tabs(["🔍 词频精确匹配", "🧬 语义模糊匹配"])
 
         with tab1:
@@ -726,7 +729,8 @@ if uploaded_file:
 
         # 3. 情感分析板块 (必须保持在这里，属于 if uploaded_file 内部)
         st.divider()
-        st.header("🎭 卖点口碑深度分析 (NSS)")
+        st.header("🎭 全量原声口碑诊断 (Overall Voice of Customer)")
+        st.info("💡 **说明**：此板块分析“用户真实关注点”。直接扫描**全量评论**，无论标题是否提及。用于发现那些标题没写、但用户极其在意的隐含痛点。")
 
         with st.spinner('正在计算句子级情感归因...'):
             # 核心修改：通过字典推导式，只取 Key 本身构造映射，实现精准匹配
