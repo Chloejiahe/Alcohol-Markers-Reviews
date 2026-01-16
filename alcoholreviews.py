@@ -945,9 +945,9 @@ if uploaded_file:
     
             # 后面所有的判断都改用 age_selected_asin
             if age_selected_asin == "全部":
-                display_age = age_results.groupby("年龄段")["提及次数"].sum().reset_index()
-                total_hits = display_age["提及次数"].sum()
-                display_age["占比 (%)"] = (display_age["提及次数"] / total_hits * 100).round(1)
+                display_age = age_results.groupby("年龄段")["提及评论数"].sum().reset_index()
+                total_hits = display_age["提及评论数"].sum()
+                display_age["占比 (%)"] = (display_age["提及评论数"] / total_hits * 100).round(1)
                 age_plot_title = "全品类受众年龄分布"
             else:
                 display_age = age_results[age_results['ASIN'] == age_selected_asin]
