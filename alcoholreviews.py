@@ -21,7 +21,80 @@ load_nltk_resources()
 # 设置页面宽度和标题
 st.set_page_config(page_title="酒精笔评论分析看板", layout="wide")
 
+@st.cache_data
 
+def calculate_nss_logic(df, mapping, sentiment_lib):
+
+    results = []
+
+    
+
+    # 1. 预处理正则表达式和情感库（只需生成一次，效率更高）
+
+    patterns = {cat: re.compile(rf'\b{re.escape(cat.lower())}\b') for cat in mapping.keys()}
+
+    processed_lib = {}
+
+    for cat in mapping.keys():
+
+        target_key = cat
+
+        while isinstance(sentiment_lib.get(target_key), str):
+
+            target_key = sentiment_lib[target_key]
+
+        lib_data = sentiment_lib.get(target_key, {"正面": [], "负面": []})
+
+        processed_lib[cat] = {"pos": set(lib_data["正面"]), "neg": set(lib_data["负面"])}
+
+
+    # 2. 核心改动：按 ASIN 进行分组遍历
+    for asin, group in df.groupby('ASIN'):
+        # 提取该 ASIN 下的所有评论并分句
+        asin_sentences = []
+        for review in group['Review Content'].fillna("").astype(str):
+            asin_sentences.extend(sent_tokenize(review.lower()))
+        
+        if not asin_sentences: continue
+
+        
+        # 3. 在该 ASIN 内部遍历每个维度
+        for category, pattern in patterns.items():
+            pos_count, neg_count, total_hit = 0, 0, 0
+            lib = processed_lib[category]
+            
+            for sentence in asin_sentences:
+                if pattern.search(sentence):
+                    total_hit += 1
+                    score = 0
+                    negations = {'not', 'no', 'never', 'bad', "don't", "doesn't"}
+                    has_negation = any(neg in sentence for neg in negations)
+
+                    if any(n in sentence for n in lib["neg"]):
+                        score = -1
+                    elif any(p in sentence for p in lib["pos"]):
+                        score = -1 if has_negation else 1
+                    
+                    if score == 0:
+                        pol = TextBlob(sentence).sentiment.polarity
+                        if pol > 0.2: score = 1
+                        elif pol < -0.1: score = -1
+
+                    if score == 1: pos_count += 1
+                    elif score == -1: neg_count += 1
+
+            if total_hit > 0:
+                results.append({
+                    "ASIN": asin, # 新增列
+                    "维度": category,
+                    "提及句子数": total_hit,
+                    "正面次数": pos_count,
+                    "负面次数": neg_count,
+                    "NSS分数": round((pos_count - neg_count) / total_hit, 3)
+                })
+                
+    return pd.DataFrame(results)
+    
 @st.cache_data
 def calculate_nss_monthly_trend(df, mapping, sentiment_lib):
     results = []
