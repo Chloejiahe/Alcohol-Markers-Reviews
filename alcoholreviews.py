@@ -24,18 +24,10 @@ st.set_page_config(page_title="酒精笔评论分析看板", layout="wide")
 
 @st.cache_data
 def calculate_nss_logic(df, mapping, sentiment_lib):
-    all_sentences = []
-    for review in df['Review Content'].fillna("").astype(str):
-        all_sentences.extend(sent_tokenize(review.lower()))
-
-    # 1. 修改正则表达式生成逻辑：只匹配维度名称本身
-    # 使用 \b 确保是单词全匹配，避免 'ink' 匹配到 'pink'
-    patterns = {
-        cat: re.compile(rf'\b{re.escape(cat.lower())}\b') 
-        for cat in mapping.keys()
-    }
-
-    # 2. 情感库处理 (保持原有重定向逻辑，因为情感表达是可以通用的)
+    results = []
+    
+    # 1. 预处理正则表达式和情感库（只需生成一次，效率更高）
+    patterns = {cat: re.compile(rf'\b{re.escape(cat.lower())}\b') for cat in mapping.keys()}
     processed_lib = {}
     for cat in mapping.keys():
         target_key = cat
@@ -44,45 +36,50 @@ def calculate_nss_logic(df, mapping, sentiment_lib):
         lib_data = sentiment_lib.get(target_key, {"正面": [], "负面": []})
         processed_lib[cat] = {"pos": set(lib_data["正面"]), "neg": set(lib_data["负面"])}
 
-    results = []
-    # 3. 遍历每个维度
-    for category, pattern in patterns.items():
-        pos_count, neg_count, total_hit = 0, 0, 0
-        lib = processed_lib[category]
+    # 2. 核心改动：按 ASIN 进行分组遍历
+    for asin, group in df.groupby('ASIN'):
+        # 提取该 ASIN 下的所有评论并分句
+        asin_sentences = []
+        for review in group['Review Content'].fillna("").astype(str):
+            asin_sentences.extend(sent_tokenize(review.lower()))
         
-        for sentence in all_sentences:
-            # 只有当句子中出现了这个维度词本身（如 'marker'）才进入计算
-            if pattern.search(sentence):
-                total_hit += 1
-                score = 0
+        if not asin_sentences: continue
+
+        # 3. 在该 ASIN 内部遍历每个维度
+        for category, pattern in patterns.items():
+            pos_count, neg_count, total_hit = 0, 0, 0
+            lib = processed_lib[category]
+            
+            for sentence in asin_sentences:
+                if pattern.search(sentence):
+                    total_hit += 1
+                    score = 0
+                    negations = {'not', 'no', 'never', 'bad', "don't", "doesn't"}
+                    has_negation = any(neg in sentence for neg in negations)
+
+                    if any(n in sentence for n in lib["neg"]):
+                        score = -1
+                    elif any(p in sentence for p in lib["pos"]):
+                        score = -1 if has_negation else 1
+                    
+                    if score == 0:
+                        pol = TextBlob(sentence).sentiment.polarity
+                        if pol > 0.2: score = 1
+                        elif pol < -0.1: score = -1
+
+                    if score == 1: pos_count += 1
+                    elif score == -1: neg_count += 1
+
+            if total_hit > 0:
+                results.append({
+                    "ASIN": asin, # 新增列
+                    "维度": category,
+                    "提及句子数": total_hit,
+                    "正面次数": pos_count,
+                    "负面次数": neg_count,
+                    "NSS分数": round((pos_count - neg_count) / total_hit, 3)
+                })
                 
-                # 判定否定逻辑
-                negations = {'not', 'no', 'never', 'bad', "don't", "doesn't"}
-                has_negation = any(neg in sentence for neg in negations)
-
-                # 匹配该维度特有的情感词
-                if any(n in sentence for n in lib["neg"]):
-                    score = -1
-                elif any(p in sentence for p in lib["pos"]):
-                    score = -1 if has_negation else 1
-                
-                # TextBlob 兜底判定
-                if score == 0:
-                    pol = TextBlob(sentence).sentiment.polarity
-                    if pol > 0.2: score = 1
-                    elif pol < -0.1: score = -1
-
-                if score == 1: pos_count += 1
-                elif score == -1: neg_count += 1
-
-        if total_hit > 0:
-            results.append({
-                "维度": category,
-                "提及句子数": total_hit,
-                "正面次数": pos_count,
-                "负面次数": neg_count,
-                "NSS分数": round((pos_count - neg_count) / total_hit, 3)
-            })
     return pd.DataFrame(results)
     
 # --- 0. 配置词库 ---
@@ -731,42 +728,55 @@ if uploaded_file:
         st.divider()
         st.header("🎭 全量原声口碑诊断 (Overall Voice of Customer)")
         st.info("💡 **说明**：此板块分析“用户真实关注点”。直接扫描**全量评论**，无论标题是否提及。用于发现那些标题没写、但用户极其在意的隐含痛点。")
-
-        with st.spinner('正在计算句子级情感归因...'):
-            # 核心修改：通过字典推导式，只取 Key 本身构造映射，实现精准匹配
+  
+        with st.spinner('正在计算 ASIN 级分维度情感...'):
             PRECISE_MAPPING = {k: [k] for k in EXTENDED_MAPPING.keys()}
-      
-            # 将传给函数的参数改为 PRECISE_MAPPING
             nss_results = calculate_nss_logic(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
-            
+
         if nss_results is not None and not nss_results.empty:
-            nss_results = nss_results.sort_values("NSS分数", ascending=True)
-            
+            # 新增：ASIN 选择器
+            all_asins = ["全部"] + sorted(nss_results['ASIN'].unique().tolist())
+            selected_asin = st.selectbox("🎯 选择要深入查看的 ASIN：", all_asins)
+
+            if selected_asin == "全部":
+                 # 如果选全部，展示各卖点在所有 ASIN 中的平均 NSS
+                display_df = nss_results.groupby("维度")["NSS分数"].mean().reset_index()
+                plot_title = "全品类平均口碑 (NSS)"
+            else:
+                # 如果选特定 ASIN，只展示该 ASIN 的数据
+                display_df = nss_results[nss_results['ASIN'] == selected_asin]
+                plot_title = f"ASIN: {selected_asin} 专项诊断"
+
+            display_df = display_df.sort_values("NSS分数", ascending=True)
+
+            # 绘制图表
             col_fig, col_table = st.columns([3, 2])
-            
             with col_fig:
-                # 选取代表性维度
-                display_df = pd.concat([nss_results.head(10), nss_results.tail(10)]).drop_duplicates()
                 fig = px.bar(
-                    display_df, 
+                    display_df.tail(15), # 展示最相关的15个维度
                     x="NSS分数", 
                     y="维度", 
                     orientation='h',
                     color="NSS分数",
                     color_continuous_scale='RdYlGn',
                     range_color=[-1, 1],
-                    title="重点卖点口碑净值 (NSS)"
-                )
-                fig.add_vline(x=0, line_dash="dash", line_color="black")
+                    title=plot_title
+                 )
                 st.plotly_chart(fig, use_container_width=True)
-                
+
             with col_table:
                 st.subheader("明细数据")
-                st.dataframe(
-                    nss_results.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
-                    height=400, use_container_width=True
-                )
+                st.dataframe(display_df, height=400, use_container_width=True)
 
+            # --- 进阶补充：横向对比热力图 ---
+            st.subheader("📊 跨型号口碑对比热力图")
+            # 选取提及次数较多的 Top 10 维度进行矩阵对比
+            top_dims = nss_results.groupby("维度")["提及句子数"].sum().nlargest(10).index
+            pivot_df = nss_results[nss_results['维度'].isin(top_dims)].pivot(index="ASIN", columns="维度", values="NSS分数")
+    
+            fig_heat = px.imshow(pivot_df, text_auto=True, color_continuous_scale='RdYlGn', aspect="auto")
+            st.plotly_chart(fig_heat, use_container_width=True)
+    
             # 负面预警
             critical_issues = nss_results[nss_results['NSS分数'] < 0]['维度'].tolist()
             if critical_issues:
