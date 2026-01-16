@@ -152,27 +152,39 @@ def calculate_nss_monthly_trend(df, mapping, sentiment_lib):
 @st.cache_data
 def calculate_age_distribution(df, age_mapping):
     results = []
+    # 提前编译正则，提高效率
+    compiled_patterns = {label: [re.compile(rf'\b{re.escape(word.lower())}\b') for word in words] 
+                         for label, words in age_mapping.items()}
+    
     for asin, group in df.groupby('ASIN'):
-        # 将该 ASIN 所有评论合并并分句，提高匹配精度
-        text_blob = " ".join(group['Review Content'].fillna("").astype(str).str.lower())
+        # 这里的计数单位变成了“评论条数”
+        counts = {label: 0 for label in age_mapping.keys()}
+        total_review_count = 0 
         
-        total_age_hits = 0
-        counts = {}
+        # 遍历每一条评论
+        for review in group['Review Content'].fillna("").astype(str).str.lower():
+            matched_labels_for_this_review = set() # 用集合记录这条评论命中了哪些标签
+            
+            for label, patterns in compiled_patterns.items():
+                for p in patterns:
+                    if p.search(review):
+                        matched_labels_for_this_review.add(label)
+                        break # 命中该标签的一个词就够了，不用再看这个标签的其他词
+            
+            # 如果这条评论有命中任何标签
+            if matched_labels_for_this_review:
+                total_review_count += 1
+                for label in matched_labels_for_this_review:
+                    counts[label] += 1
         
-        for age_label, keywords in age_mapping.items():
-            # 使用正则匹配完整单词，避免 'artist' 匹配到 'art'
-            count = sum(len(re.findall(rf'\b{re.escape(word)}\b', text_blob)) for word in keywords)
-            if count > 0:
-                counts[age_label] = count
-                total_age_hits += count
-        
-        if total_age_hits > 0:
+        # 计算该 ASIN 的最终结果
+        if total_review_count > 0:
             for label, cnt in counts.items():
                 results.append({
                     "ASIN": asin,
                     "年龄段": label,
-                    "提及次数": cnt,
-                    "占比 (%)": round(cnt / total_age_hits * 100, 1)
+                    "提及评论数": cnt, # 这里的单位变了，更科学
+                    "占比 (%)": round(cnt / total_review_count * 100, 1)
                 })
     return pd.DataFrame(results)
     
@@ -920,7 +932,7 @@ if uploaded_file:
         # --- 4. 用户年龄画像分析 (Age Persona) ---
         st.divider()
         st.header("👥 用户年龄画像透视 (Age Demographics)")
-        st.info("💡 **逻辑**：基于评论中的身份词（如 kids, teen, retired）识别核心受众年龄段。")
+        st.info("💡 **逻辑**：识别每条评论中的身份词。若单条评论多次提及同一标签，仅计为 1 人次，反映受众覆盖面。")
 
         with st.spinner('正在提取年龄特征...'):
             age_results = calculate_age_distribution(df_input, AGE_DEMOGRAPHICS_LIB)
@@ -960,9 +972,9 @@ if uploaded_file:
                 with c2:
                     st.markdown("### 🎯 核心受众判定")
                     # 自动获取占比最高的年龄段
-                    top_age = display_age.sort_values("提及次数", ascending=False).iloc[0]
-                    st.metric("核心受众", top_age['年龄段'])
-                    st.write(f"在提及年龄相关的评论中，**{top_age['年龄段']}** 的占比最高，达到 **{top_age['占比 (%)']}%**。")
+                    top_age = display_age.sort_values("提及评论数", ascending=False).iloc[0]
+                    st.metric("核心受众群", top_age['年龄段'])
+                    st.write(f"在识别到身份标签的评论中，约有 **{top_age['占比 (%)']}%** 的用户指向 **{top_age['年龄段']}**。")
                     
                     # 商业建议小贴士
                     if "儿童" in top_age['年龄段']:
@@ -970,7 +982,7 @@ if uploaded_file:
                     elif "成年人" in top_age['年龄段']:
                         st.success("📍 **运营建议**：建议强调『色彩过渡』、『叠色效果』及『笔触细腻度』，视觉上走专业/艺术风格。")
             else:
-                st.warning(f"ASIN: {selected_asin} 暂无明显的年龄相关特征数据。")
+                st.warning(f"ASIN: {age_selected_asin} 暂无明显的年龄相关特征数据。")
         else:
             st.warning("当前评论数据中未发现明显的年龄标签词。")
             
