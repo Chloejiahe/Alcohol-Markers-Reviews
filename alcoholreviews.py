@@ -23,10 +23,13 @@ st.set_page_config(page_title="酒精笔评论分析看板", layout="wide")
 
 
 @st.cache_data
-def calculate_nss_logic(df, mapping, sentiment_lib):
+def calculate_nss_monthly_trend(df, mapping, sentiment_lib):
     results = []
+    # 确保 Month 列为字符串格式，方便绘图展示
+    df = df.copy()
+    df['Month_Str'] = df['Month'].astype(str)
     
-    # 1. 预处理正则表达式和情感库（只需生成一次，效率更高）
+    # 1. 预处理正则表达式和情感库
     patterns = {cat: re.compile(rf'\b{re.escape(cat.lower())}\b') for cat in mapping.keys()}
     processed_lib = {}
     for cat in mapping.keys():
@@ -36,16 +39,14 @@ def calculate_nss_logic(df, mapping, sentiment_lib):
         lib_data = sentiment_lib.get(target_key, {"正面": [], "负面": []})
         processed_lib[cat] = {"pos": set(lib_data["正面"]), "neg": set(lib_data["负面"])}
 
-    # 2. 核心改动：按 ASIN 进行分组遍历
-    for asin, group in df.groupby('ASIN'):
-        # 提取该 ASIN 下的所有评论并分句
+    # 2. 核心：按 [ASIN, Month_Str] 双重分组
+    for (asin, month), group in df.groupby(['ASIN', 'Month_Str']):
         asin_sentences = []
         for review in group['Review Content'].fillna("").astype(str):
             asin_sentences.extend(sent_tokenize(review.lower()))
         
         if not asin_sentences: continue
 
-        # 3. 在该 ASIN 内部遍历每个维度
         for category, pattern in patterns.items():
             pos_count, neg_count, total_hit = 0, 0, 0
             lib = processed_lib[category]
@@ -53,33 +54,26 @@ def calculate_nss_logic(df, mapping, sentiment_lib):
             for sentence in asin_sentences:
                 if pattern.search(sentence):
                     total_hit += 1
+                    # --- 复用你原有的判定逻辑 ---
                     score = 0
                     negations = {'not', 'no', 'never', 'bad', "don't", "doesn't"}
                     has_negation = any(neg in sentence for neg in negations)
-
-                    if any(n in sentence for n in lib["neg"]):
-                        score = -1
-                    elif any(p in sentence for p in lib["pos"]):
-                        score = -1 if has_negation else 1
-                    
+                    if any(n in sentence for n in lib["neg"]): score = -1
+                    elif any(p in sentence for p in lib["pos"]): score = -1 if has_negation else 1
                     if score == 0:
                         pol = TextBlob(sentence).sentiment.polarity
                         if pol > 0.2: score = 1
                         elif pol < -0.1: score = -1
-
                     if score == 1: pos_count += 1
                     elif score == -1: neg_count += 1
 
             if total_hit > 0:
                 results.append({
-                    "ASIN": asin, # 新增列
+                    "ASIN": asin,
+                    "月份": month,
                     "维度": category,
-                    "提及句子数": total_hit,
-                    "正面次数": pos_count,
-                    "负面次数": neg_count,
                     "NSS分数": round((pos_count - neg_count) / total_hit, 3)
                 })
-                
     return pd.DataFrame(results)
     
 # --- 0. 配置词库 ---
@@ -179,7 +173,6 @@ EXTENDED_MAPPING = {
     "memoffice": ["memoffice", "brand"],
     "underlining": ["underlining", "underline", "highlight", "note taking"],
     "halloween": ["halloween", "spooky", "fall", "orange", "black"],
-    "highlighters": ["highlighters", "highlighting", "neon", "marker"],
     "highlighter": ["highlighter", "highlighting", "neon", "marker"],
     "bianyo": ["bianyo"],
     "cozy": ["cozy", "comfortable", "warm", "homey"],
@@ -790,6 +783,56 @@ if uploaded_file:
                 height=500, 
                 use_container_width=True
             )
+
+            # 在这里插入：【板块 4】月份口碑浮动折线图 (新创面板)
+            st.divider() 
+            st.header("📈 专项：维度口碑月份波动看板 (2023-2025)")
+            st.info("💡 **说明**：用于追踪 2023-2025 年间特定卖点的口碑演变。")
+            
+            # 1. 计算月度数据
+            with st.spinner('正在追溯月度趋势...'):
+                # 依然使用你top 100 个词的映射
+                PRECISE_MAPPING = {k: [k] for k in EXTENDED_MAPPING.keys()}
+                monthly_data = calculate_nss_monthly_trend(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
+            if not monthly_data.empty:
+                # 2. 独立的选择器 (使用 unique key 避免干扰上方看板)
+                c1, c2 = st.columns(2)
+                with c1:
+                    chosen_asin = st.selectbox("1. 趋势分析-选择 ASIN", 
+                                               sorted(monthly_data['ASIN'].unique()), 
+                                               key="trend_asin_unique")
+                with c2:
+                    # 仅显示该 ASIN 下出现过的维度
+                    valid_dims = monthly_data[monthly_data['ASIN'] == chosen_asin]['维度'].unique()
+                    chosen_dim = st.selectbox("2. 趋势分析-选择维度", 
+                                              sorted(valid_dims), 
+                                              key="trend_dim_unique")
+                # 3. 过滤并排序
+                plot_df = monthly_data[(monthly_data['ASIN'] == chosen_asin) & 
+                                       (monthly_data['维度'] == chosen_dim)].sort_values("月份")
+                # 4. 绘制折线图
+                import plotly.express as px
+                fig_line = px.line(
+                    plot_df, 
+                    x="月份", 
+                    y="NSS分数", 
+                    text="NSS分数",
+                    markers=True,
+                    title=f"【{chosen_asin}】在【{chosen_dim}】维度的月度口碑走势",
+                    range_y=[-1.1, 1.1],
+                    template="plotly_white"
+                )
+                # 增强视觉效果
+                fig_line.add_hline(y=0, line_dash="dash", line_color="red", annotation_text="基准线")
+                fig_line.update_traces(line_width=3, marker_size=8, textposition="top center")
+                fig_line.update_xaxes(type='category', tickangle=45) # 确保月份按标签顺序排列
+
+                # 可选：显示该折线图的原始数据表
+                with st.expander("查看月度趋势原始数值"):
+                    st.dataframe(plot_df, use_container_width=True)
+            else:
+                st.warning("未能根据数据生成月份趋势，请检查 'Month' 列。")
+                st.plotly_chart(fig_line, use_container_width=True)
     
         else:
             st.warning("未能匹配到词库中的卖点，请扩充 EXTENDED_MAPPING 或检查评论列。")
