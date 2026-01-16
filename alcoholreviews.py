@@ -732,61 +732,64 @@ if uploaded_file:
         with st.spinner('正在计算 ASIN 级分维度情感...'):
             PRECISE_MAPPING = {k: [k] for k in EXTENDED_MAPPING.keys()}
             nss_results = calculate_nss_logic(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
-
+        
         if nss_results is not None and not nss_results.empty:
-            # 新增：ASIN 选择器
+            # 1. ASIN 选择器
             all_asins = ["全部"] + sorted(nss_results['ASIN'].unique().tolist())
             selected_asin = st.selectbox("🎯 选择要深入查看的 ASIN：", all_asins)
 
             if selected_asin == "全部":
-                 # 如果选全部，展示各卖点在所有 ASIN 中的平均 NSS
+                # 计算全大盘平均分
                 display_df = nss_results.groupby("维度")["NSS分数"].mean().reset_index()
-                plot_title = "全品类平均口碑 (NSS)"
+                plot_title = "全品类平均口碑概览 (NSS)"
             else:
-                # 如果选特定 ASIN，只展示该 ASIN 的数据
+                # 过滤特定 ASIN
                 display_df = nss_results[nss_results['ASIN'] == selected_asin]
-                plot_title = f"ASIN: {selected_asin} 专项诊断"
+                plot_title = f"ASIN: {selected_asin} 专项口碑诊断"
 
             display_df = display_df.sort_values("NSS分数", ascending=True)
 
-            # 绘制图表
-            col_fig, col_table = st.columns([3, 2])
-            with col_fig:
-                fig = px.bar(
-                    display_df.tail(15), # 展示最相关的15个维度
-                    x="NSS分数", 
-                    y="维度", 
-                    orientation='h',
-                    color="NSS分数",
-                    color_continuous_scale='RdYlGn',
-                    range_color=[-1, 1],
-                    title=plot_title
-                 )
-                st.plotly_chart(fig, use_container_width=True)
+            # 2. 核心修改：让图表独占一行并放大
+            st.subheader(f"📊 {plot_title}")
+            
+            # 动态计算高度：防止维度太多导致 y 轴文字重叠 (每个维度分配 25 像素)
+            dynamic_height = max(500, len(display_df) * 25)
 
-            with col_table:
-                st.subheader("明细数据")
-                st.dataframe(display_df, height=400, use_container_width=True)
+            fig = px.bar(
+                display_df, 
+                x="NSS分数", 
+                y="维度", 
+                orientation='h',
+                color="NSS分数",
+                color_continuous_scale='RdYlGn',
+                range_color=[-1, 1],
+                text_auto=".2f", # 柱状图上直接显示分数
+                height=dynamic_height # 应用动态高度
+            )
+            
+            # 优化图表边距，确保长标签不被截断
+            fig.update_layout(margin=dict(l=150, r=20, t=50, b=50))
+            
+            # 渲染大图
+            st.plotly_chart(fig, use_container_width=True)
 
-            # --- 进阶补充：横向对比热力图 ---
-            st.subheader("📊 跨型号口碑对比热力图")
-            # 选取提及次数较多的 Top 10 维度进行矩阵对比
-            top_dims = nss_results.groupby("维度")["提及句子数"].sum().nlargest(10).index
-            pivot_df = nss_results[nss_results['维度'].isin(top_dims)].pivot(index="ASIN", columns="维度", values="NSS分数")
+            # 3. 核心修改：明细数据移至下方
+            st.divider()
+            st.subheader("📋 维度明细数据对照表")
+            st.info("💡 提示：点击表头可进行二次排序，右上角可放大查看。")
+            
+            # 使用 background_gradient 让表格数据也具备视觉颜色指示
+            st.dataframe(
+                display_df.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
+                height=500, 
+                use_container_width=True
+            )
     
-            fig_heat = px.imshow(pivot_df, text_auto=True, color_continuous_scale='RdYlGn', aspect="auto")
-            st.plotly_chart(fig_heat, use_container_width=True)
-    
-            # 负面预警
-            critical_issues = nss_results[nss_results['NSS分数'] < 0]['维度'].tolist()
-            if critical_issues:
-                st.error(f"⚠️ **负面预警**：以下维度口碑为负，建议优先检查：{', '.join(critical_issues)}")
         else:
             st.warning("未能匹配到词库中的卖点，请扩充 EXTENDED_MAPPING 或检查评论列。")
 
     except Exception as e:
         st.error(f"处理文件时出错: {str(e)}")
-        st.info("提示：请确保 CSV/Excel 包含 ASIN 和 review_body (评论内容) 列。")
 
 else:
     # 没有任何文件上传时显示这个提示
