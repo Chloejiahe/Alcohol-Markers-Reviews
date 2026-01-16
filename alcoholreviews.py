@@ -19,7 +19,7 @@ def load_nltk_resources():
 load_nltk_resources()
 
 # 设置页面宽度和标题
-st.set_page_config(page_title="酒精笔卖点渗透看板", layout="wide")
+st.set_page_config(page_title="酒精笔评论分析看板", layout="wide")
 
 
 @st.cache_data
@@ -683,7 +683,7 @@ def perform_analysis(df, mode="exact"):
     return pd.DataFrame(analysis_data).sort_values("评论回声率 (%)", ascending=False)
 
 # --- 3. 展示层 ---
-st.title("🎯 酒精笔卖点渗透看板 (全效合一版)")
+st.title("🎯 酒精笔评论分析看板")
 
 # 整个脚本只保留一个 file_uploader
 uploaded_file = st.file_uploader("上传数据文件 (Excel/CSV)", type=['csv', 'xlsx'])
