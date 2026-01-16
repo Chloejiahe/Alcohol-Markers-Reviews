@@ -989,7 +989,7 @@ if uploaded_file:
         # --- 5. BS下没有标kid的前10个ASIN的儿童使用人群分析 ---
 
         st.divider()
-        st.header("🧒 BS非kid标前10 ASIN儿童使用占比分析")
+        st.header("🧒 Top 10 ASIN 儿童使用占比分析")
         st.info("💡 **逻辑**：分析BS下没有标注'kid'的前10个ASIN，计算每个ASIN评论中儿童使用人群的占比。")
 
         # top10产品
