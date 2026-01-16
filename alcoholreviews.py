@@ -737,11 +737,17 @@ if uploaded_file:
             # 1. ASIN 选择器
             all_asins = ["全部"] + sorted(nss_results['ASIN'].unique().tolist())
             selected_asin = st.selectbox("🎯 选择要深入查看的 ASIN：", all_asins)
-
+                     
             if selected_asin == "全部":
-                # 计算全大盘平均分
-                display_df = nss_results.groupby("维度")["NSS分数"].mean().reset_index()
+                # ✅ 修正逻辑：对数量列求和，对分数取平均
+                display_df = nss_results.groupby("维度").agg({
+                    "提及句子数": "sum",
+                    "正面次数": "sum",
+                    "负面次数": "sum",
+                    "NSS分数": "mean"
+                }).reset_index()
                 plot_title = "全品类平均口碑概览 (NSS)"
+
             else:
                 # 过滤特定 ASIN
                 display_df = nss_results[nss_results['ASIN'] == selected_asin]
