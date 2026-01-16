@@ -790,129 +790,90 @@ if uploaded_file:
             res_fuzzy = perform_analysis(df_input, mode="fuzzy")
             st.dataframe(res_fuzzy.style.background_gradient(subset=['评论回声率 (%)', '心智转化比'], cmap='OrRd'), use_container_width=True)
 
-        # 3. 情感分析板块 (必须保持在这里，属于 if uploaded_file 内部)
+        # 3. 情感分析板块
         st.divider()
         st.header("🎭 全量原声口碑诊断 (Overall Voice of Customer)")
-        st.info("💡 **说明**：此板块分析“用户真实关注点”。直接扫描**全量评论**，无论标题是否提及。用于发现那些标题没写、但用户极其在意的隐含痛点。")
+        st.info("💡 **说明**：分析用户真实关注点。")
   
         with st.spinner('正在计算 ASIN 级分维度情感...'):
             PRECISE_MAPPING = {k: [k] for k in EXTENDED_MAPPING.keys()}
             nss_results = calculate_nss_logic(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
         
         if nss_results is not None and not nss_results.empty:
-            # 1. ASIN 选择器
+            # --- 3.1 概览看板 ---
             all_asins = ["全部"] + sorted(nss_results['ASIN'].unique().tolist())
             selected_asin = st.selectbox("🎯 选择要深入查看的 ASIN：", all_asins)
                      
             if selected_asin == "全部":
-                # ✅ 修正逻辑：对数量列求和，对分数取平均
                 display_df = nss_results.groupby("维度").agg({
-                    "提及句子数": "sum",
-                    "正面次数": "sum",
-                    "负面次数": "sum",
-                    "NSS分数": "mean"
+                    "提及句子数": "sum", "正面次数": "sum", "负面次数": "sum", "NSS分数": "mean"
                 }).reset_index()
                 plot_title = "全品类平均口碑概览 (NSS)"
-
             else:
-                # 过滤特定 ASIN
                 display_df = nss_results[nss_results['ASIN'] == selected_asin]
                 plot_title = f"ASIN: {selected_asin} 专项口碑诊断"
 
             display_df = display_df.sort_values("NSS分数", ascending=True)
-
-            # 2. 核心修改：让图表独占一行并放大
             st.subheader(f"📊 {plot_title}")
             
-            # 动态计算高度：防止维度太多导致 y 轴文字重叠 (每个维度分配 25 像素)
             dynamic_height = max(500, len(display_df) * 25)
-
-            fig = px.bar(
-                display_df, 
-                x="NSS分数", 
-                y="维度", 
-                orientation='h',
-                color="NSS分数",
-                color_continuous_scale='RdYlGn',
-                range_color=[-1, 1],
-                text_auto=".2f", # 柱状图上直接显示分数
-                height=dynamic_height # 应用动态高度
-            )
-            
-            # 优化图表边距，确保长标签不被截断
+            fig = px.bar(display_df, x="NSS分数", y="维度", orientation='h', color="NSS分数",
+                         color_continuous_scale='RdYlGn', range_color=[-1, 1], text_auto=".2f", height=dynamic_height)
             fig.update_layout(margin=dict(l=150, r=20, t=50, b=50))
-            
-            # 渲染大图
             st.plotly_chart(fig, use_container_width=True)
 
-            # 3. 核心修改：明细数据移至下方
+            # --- 3.2 数据明细表 ---
             st.divider()
             st.subheader("📋 维度明细数据对照表")
-            st.info("💡 提示：点击表头可进行二次排序，右上角可放大查看。")
-            
-            # 使用 background_gradient 让表格数据也具备视觉颜色指示
-            st.dataframe(
-                display_df.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
-                height=500, 
-                use_container_width=True
-            )
+            st.dataframe(display_df.style.background_gradient(subset=['NSS分数'], cmap='RdYlGn', vmin=-1, vmax=1),
+                         height=400, use_container_width=True)
 
-            # 在这里插入：【板块 4】月份口碑浮动折线图 (新创面板)
+            # --- 3.3 月份口碑波动看板 (核心修复区) ---
             st.divider() 
-            st.header("📈 专项：维度口碑月份波动看板 (2023-2025)")
-            st.info("💡 **说明**：用于追踪 2023-2025 年间特定卖点的口碑演变。")
+            st.subheader("📈 专项：维度口碑月份波动看板 (2023-2025)")
             
-            # 1. 计算月度数据
-            with st.spinner('正在追溯月度趋势...'):
-                # 依然使用你top 100 个词的映射
-                PRECISE_MAPPING = {k: [k] for k in EXTENDED_MAPPING.keys()}
-                monthly_data = calculate_nss_monthly_trend(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
-            if not monthly_data.empty:
-                # 2. 独立的选择器 (使用 unique key 避免干扰上方看板)
-                c1, c2 = st.columns(2)
-                with c1:
-                    chosen_asin = st.selectbox("1. 趋势分析-选择 ASIN", 
-                                               sorted(monthly_data['ASIN'].unique()), 
-                                               key="trend_asin_unique")
-                with c2:
-                    # 仅显示该 ASIN 下出现过的维度
-                    valid_dims = monthly_data[monthly_data['ASIN'] == chosen_asin]['维度'].unique()
-                    chosen_dim = st.selectbox("2. 趋势分析-选择维度", 
-                                              sorted(valid_dims), 
-                                              key="trend_dim_unique")
-                # 3. 过滤并排序
-                plot_df = monthly_data[(monthly_data['ASIN'] == chosen_asin) & 
-                                       (monthly_data['维度'] == chosen_dim)].sort_values("月份")
-                # 4. 绘制折线图
-                import plotly.express as px
-                fig_line = px.line(
-                    plot_df, 
-                    x="月份", 
-                    y="NSS分数", 
-                    text="NSS分数",
-                    markers=True,
-                    title=f"【{chosen_asin}】在【{chosen_dim}】维度的月度口碑走势",
-                    range_y=[-1.1, 1.1],
-                    template="plotly_white"
-                )
-                # 增强视觉效果
-                fig_line.add_hline(y=0, line_dash="dash", line_color="red", annotation_text="基准线")
-                fig_line.update_traces(line_width=3, marker_size=8, textposition="top center")
-                fig_line.update_xaxes(type='category', tickangle=45) # 确保月份按标签顺序排列
+            if 'Month' in df_input.columns:
+                with st.spinner('正在追溯月度趋势...'):
+                    monthly_data = calculate_nss_monthly_trend(df_input, PRECISE_MAPPING, SENTIMENT_LIB)
+                
+                if not monthly_data.empty:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        # 自动关联上方的 ASIN 选择，如果是“全部”则允许在此单独选一个看趋势
+                        trend_asin = st.selectbox("1. 趋势分析-确认 ASIN", 
+                                                  sorted(monthly_data['ASIN'].unique()), 
+                                                  index=0 if selected_asin=="全部" else sorted(monthly_data['ASIN'].unique()).index(selected_asin),
+                                                  key="trend_asin_unique")
+                    with c2:
+                        valid_dims = sorted(monthly_data[monthly_data['ASIN'] == trend_asin]['维度'].unique())
+                        chosen_dim = st.selectbox("2. 趋势分析-选择维度", valid_dims, key="trend_dim_unique")
 
-                # 可选：显示该折线图的原始数据表
-                with st.expander("查看月度趋势原始数值"):
-                    st.dataframe(plot_df, use_container_width=True)
+                    plot_df = monthly_data[(monthly_data['ASIN'] == trend_asin) & (monthly_data['维度'] == chosen_dim)].sort_values("月份")
+
+                    if not plot_df.empty:
+                        fig_line = px.line(plot_df, x="月份", y="NSS分数", text="NSS分数", markers=True,
+                                           title=f"【{trend_asin}】在【{chosen_dim}】维度的月度趋势",
+                                           range_y=[-1.1, 1.1], template="plotly_white")
+                        fig_line.add_hline(y=0, line_dash="dash", line_color="red")
+                        fig_line.update_traces(line_width=3, marker_size=8, textposition="top center")
+                        fig_line.update_xaxes(type='category', tickangle=45)
+                        
+                        # ✅ 确保这行代码在绘图逻辑内部，且能被正常执行
+                        st.plotly_chart(fig_line, use_container_width=True)
+                    else:
+                        st.warning("所选维度暂无月度统计数据。")
+                else:
+                    st.warning("未能根据数据生成月份趋势。")
             else:
-                st.warning("未能根据数据生成月份趋势，请检查 'Month' 列。")
-                st.plotly_chart(fig_line, use_container_width=True)
-    
+                st.error("❌ 数据表中未发现 'Month' 列，无法生成时间趋势图。")
+        
         else:
-            st.warning("未能匹配到词库中的卖点，请扩充 EXTENDED_MAPPING 或检查评论列。")
+            st.warning("未能匹配到词库中的卖点，请扩充映射表。")
 
     except Exception as e:
         st.error(f"处理文件时出错: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc()) # 打印具体报错位置
 
 else:
-    # 没有任何文件上传时显示这个提示
     st.info("👋 请在上方上传数据文件以开始分析。")
