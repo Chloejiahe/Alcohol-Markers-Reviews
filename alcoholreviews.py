@@ -148,6 +148,33 @@ def calculate_nss_monthly_trend(df, mapping, sentiment_lib):
                     "NSS分数": round((pos_count - neg_count) / total_hit, 3)
                 })
     return pd.DataFrame(results)
+
+@st.cache_data
+def calculate_age_distribution(df, age_mapping):
+    results = []
+    for asin, group in df.groupby('ASIN'):
+        # 将该 ASIN 所有评论合并并分句，提高匹配精度
+        text_blob = " ".join(group['Review Content'].fillna("").astype(str).str.lower())
+        
+        total_age_hits = 0
+        counts = {}
+        
+        for age_label, keywords in age_mapping.items():
+            # 使用正则匹配完整单词，避免 'artist' 匹配到 'art'
+            count = sum(len(re.findall(rf'\b{re.escape(word)}\b', text_blob)) for word in keywords)
+            if count > 0:
+                counts[age_label] = count
+                total_age_hits += count
+        
+        if total_age_hits > 0:
+            for label, cnt in counts.items():
+                results.append({
+                    "ASIN": asin,
+                    "年龄段": label,
+                    "提及次数": cnt,
+                    "占比 (%)": round(cnt / total_age_hits * 100, 1)
+                })
+    return pd.DataFrame(results)
     
 # --- 0. 配置词库 ---
 EXTENDED_MAPPING = {
@@ -253,6 +280,28 @@ EXTENDED_MAPPING = {
     "eggs": ["eggs", "egg"]
 }
 
+# --- 专注年龄段的画像词库 ---
+AGE_DEMOGRAPHICS_LIB = {
+    "儿童/幼儿 (0-12岁)": [
+        'kid', 'kids', 'child', 'children', 'toddler', 'baby', 'preschooler', 
+        'little one', 'grandson', 'granddaughter', 'for my son', 'for my daughter',
+        'nephew', 'niece', 'elementary school'
+    ],
+    "青少年/学生 (13-22岁)": [
+        'teen', 'teenager', 'adolescent', 'youth', 'high school', 'middle school', 
+        'college student', 'university student', 'art student', 'for class'
+    ],
+    "成年人/专业人士 (23-60岁)": [
+        'adult', 'professional', 'pro artist', 'office work', 'at work', 
+        'client work', 'in my studio', 'career', 'adult coloring'
+    ],
+    "老年人 (60岁以上)": [
+        'senior', 'elderly', 'retired', 'grandparent', 'grandfather', 
+        'grandmother', 'golden years', 'grandma', 'grandpa'
+    ]
+}
+
+#情感词库#
 SENTIMENT_LIB = {
     # 1. 通用称呼类 (核心：markers)
     "markers": {
@@ -868,6 +917,57 @@ if uploaded_file:
         else:
             st.warning("未能匹配到词库中的卖点，请扩充映射表。")
 
+        # --- 4. 用户年龄画像分析 (Age Persona) ---
+        st.divider()
+        st.header("👥 用户年龄画像透视 (Age Demographics)")
+        st.info("💡 **逻辑**：基于评论中的身份词（如 kids, teen, retired）识别核心受众年龄段。")
+
+        with st.spinner('正在提取年龄特征...'):
+            age_df = calculate_age_distribution(df_input, AGE_DEMOGRAPHICS_LIB)
+
+        if not age_df.empty:
+            # 自动同步上方选中的 selected_asin
+            if selected_asin == "全部":
+                display_age = age_df.groupby("年龄段")["提及次数"].sum().reset_index()
+                display_age["占比 (%)"] = (display_age["提及次数"] / display_age["提及次数"].sum() * 100).round(1)
+                age_title = "全品类受众年龄分布"
+            else:
+                display_age = age_df[age_df['ASIN'] == selected_asin]
+                age_title = f"ASIN: {selected_asin} 受众年龄画像"
+
+            if not display_age.empty:
+                # 绘图：使用漏斗图或水平条形图，清晰展示层级
+                fig_age = px.bar(
+                    display_age.sort_values("占比 (%)", ascending=True),
+                    x="占比 (%)",
+                    y="年龄段",
+                    orientation='h',
+                    text="占比 (%)",
+                    title=age_title,
+                    color="年龄段",
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                
+                c1, c2 = st.columns([3, 2])
+                with c1:
+                    st.plotly_chart(fig_age, use_container_width=True)
+                with c2:
+                    st.markdown("### 🎯 核心受众判定")
+                    # 自动获取占比最高的年龄段
+                    top_age = display_age.sort_values("提及次数", ascending=False).iloc[0]
+                    st.metric("核心受众", top_age['年龄段'])
+                    st.write(f"在提及年龄相关的评论中，**{top_age['年龄段']}** 的占比最高，达到 **{top_age['占比 (%)']}%**。")
+                    
+                    # 商业建议小贴士
+                    if "儿童" in top_age['年龄段']:
+                        st.warning("📍 **运营建议**：建议在 Listing 中强调『无毒』、『易清洗』及『耐摔性』，视觉上增加家庭/亲子元素。")
+                    elif "成年人" in top_age['年龄段']:
+                        st.success("📍 **运营建议**：建议强调『色彩过渡』、『叠色效果』及『笔触细腻度』，视觉上走专业/艺术风格。")
+            else:
+                st.warning(f"ASIN: {selected_asin} 暂无明显的年龄相关特征数据。")
+        else:
+            st.warning("当前评论数据中未发现明显的年龄标签词。")
+            
     except Exception as e:
         st.error(f"处理文件时出错: {str(e)}")
         import traceback
