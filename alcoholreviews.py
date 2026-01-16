@@ -178,16 +178,16 @@ EXTENDED_MAPPING = {
     "bonus": ["bonus", "extra", "free", "additional", "gift"],
     "series": ["series", "collection", "set"],
     "highlighters": ["highlighters", "highlighting", "neon", "bright"],
-    "teens": ["teens", "teenager", "youth", "12-17"],
     "decorations": ["decorations", "decor", "craft", "diy"],
     "memoffice": ["memoffice", "brand"],
-    "stuffers": ["stuffers", "fillers", "gift", "stocking"],
     "underlining": ["underlining", "underline", "highlight", "note taking"],
     "halloween": ["halloween", "spooky", "fall", "orange", "black"],
     "highlighters": ["highlighters", "highlighting", "neon", "marker"],
     "highlighter": ["highlighter", "highlighting", "neon", "marker"],
     "bianyo": ["bianyo"],
     "cozy": ["cozy", "comfortable", "warm", "homey"],
+    "easter": ["easter" "easter holiday"],
+    "eggs": ["eggs", "egg"]
 }
 
 SENTIMENT_LIB = {
@@ -374,7 +374,7 @@ SENTIMENT_LIB = {
             'disappointed kids', 'not what my teen wanted', 'too professional for a child'
         ]
     },
-    "school": "kids", "students": "kids", "girls": "kids", "boys": "kids", "teens": "kids", "teen": "kids",
+    "school": "kids", "students": "kids", "girls": "kids", "boys": "kids", "teen": "kids",
     
     # 13. 节日礼赠
     "gift": {
@@ -592,21 +592,30 @@ SENTIMENT_LIB = {
             'scratches thin paper', 'not good for textbooks', 'too bulky for small notes'
         ]
     },
-    
-    # 24. stuffers
-    "stuffers": {
+
+     # 24. 节日
+    "easter": {
         "正面": [
-            'perfect stocking stuffer', 'great small gift', 'kids loved this stuffer', 
-            'fits perfectly in a stocking', 'excellent holiday stuffer', 'ideal stocking filler', 
-            'cute little gift', 'was a big hit as a stuffer', 'nice surprise for kids'
+            "perfect for easter", "great for baskets", "holiday fun", 
+            "bright spring colors", "kids loved them", "easter gift"
         ],
         "负面": [
-            'too big for a stuffer', 'poor quality for a gift', 'packaging too bulky', 
-            'arrived too late for stocking', 'disappointing as a stuffer', 
-            'box was crushed (not giftable)', 'not worth the price for a stuffer'
+            "arrived late", "not for holiday", "expensive for one day", 
+            "colors too dark", "box damaged"
         ]
     },
-}
+
+    "eggs": {
+        "正面": [
+            "stayed on eggs", "fast drying", "vibrant on shells", 
+            "didn't smudge", "worked on plastic eggs", "easy to decorate"
+        ],
+        "负面": [
+            "smudged on shells", "wiped right off", "too watery", 
+            "stained fingers", "not permanent", "runs on plastic"
+        ]
+    }
+ }    
 
 CLEAN_MAPPING = {str(k).lower(): [str(i).lower() for i in v] for k, v in EXTENDED_MAPPING.items()}
 
