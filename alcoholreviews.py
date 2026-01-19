@@ -278,18 +278,18 @@ EXTENDED_MAPPING = {
     "aesthetic": ["aesthetic", "beautiful", "vibrant", "pretty"],
     "creators": ["creators", "creator", "artists"],
     "barrel": ["barrel", "handle", "hold", "grip", "shape"],
-    "bonus": ["bonus", "extra", "free", "additional", "gift"],
     "series": ["series", "collection", "set"],
     "highlighters": ["highlighters", "highlighting", "neon", "bright"],
-    "decorations": ["decorations", "decor", "craft", "diy"],
     "memoffice": ["memoffice", "brand"],
     "underlining": ["underlining", "underline", "highlight", "note taking"],
     "halloween": ["halloween", "spooky", "fall", "orange", "black"],
     "highlighter": ["highlighter", "highlighting", "neon", "marker"],
     "bianyo": ["bianyo"],
     "cozy": ["cozy", "comfortable", "warm", "homey"],
-    "easter": ["easter", "easter holiday"],
-    "eggs": ["eggs", "egg"]
+    "christmas": ["christmas", "xmas", "santa", "merry"],
+    "101": ["101", "count", "variety", "huge set", "large pack", "plenty", "lots of"],
+    "dabo": ["dabo", "shobo"],
+    "shobo": ["shobo", "shobo"]
 }
 
 # --- 专注年龄段的画像词库 ---
@@ -336,7 +336,7 @@ SENTIMENT_LIB = {
         "正面": ['all present', 'full count', 'none missing', 'no missing markers', 'all arrived juiced', 'every color included', 'all accounted for'],
         "负面": ['missing markers', 'arrived with dry ones', 'short a few', 'not the full count', 'some were empty', 'missing a few colors']
     },
-    "120": "100", "121": "100", "168": "100", "262": "100",
+    "120": "100", "121": "100", "168": "100", "262": "100", "101": "100",
 
     # 4. 套装与价值 (核心：set) -> 关注套装整体给人的感觉
     "set": {
@@ -347,7 +347,7 @@ SENTIMENT_LIB = {
         "负面": ['not worth the price', 'flimsy kit', 'disappointed in the set', 'bonus was useless', 
                'cheap supplies', 'disappointed in the set', 'flimsy kit','incomplete set']
     },
-    "kit": "set", "plus": "set", "bonus": "set", "supplies": "set", "series": "set",
+    "kit": "set", "plus": "set", "supplies": "set", "series": "set",
     
     # 5. 色彩特性类 (核心：blending)
     "blending": {
@@ -479,6 +479,7 @@ SENTIMENT_LIB = {
     "copic": "ohuhu", "caliart": "ohuhu", "soucolor": "ohuhu", 
     "taotree": "ohuhu", "bianyo": "ohuhu", "shuttle": "ohuhu", "sfaih": "ohuhu", 
     "wellokb": "ohuhu", "memoffice": "ohuhu", "anymark": "ohuhu", "honolulu": "ohuhu", "oahu": "ohuhu",
+    "dabo": "ohuhu", "shobo": "ohuhu",
     
     # 12. 教育场景
     "kids": {
@@ -516,7 +517,7 @@ SENTIMENT_LIB = {
             'too messy for holiday crafts', 'arrived too late for the holiday'
         ]
     },
-    "gifts": "gift","halloween": "gift","decorations": "gift",
+    "gifts": "gift", "halloween": "gift",
     
     # 13. 专业背书与创作  
     "professional": {
@@ -718,25 +719,13 @@ SENTIMENT_LIB = {
     },
 
      # 24. 节日
-    "easter": {
+    "christmas": {
         "正面": [
-            "perfect for easter", "great for baskets", "holiday fun", 
-            "bright spring colors", "kids loved them", "easter gift"
+        "perfect for christmas", "great for christmas", "holiday fun", "bright winter colors", "kids loved them", 
+        "christmas gift", "stocking stuffer", "festive atmosphere", "good for cards", "holiday spirit"
         ],
-        "负面": [
-            "arrived late", "not for holiday", "expensive for one day", 
-            "colors too dark", "box damaged"
-        ]
-    },
-
-    "eggs": {
-        "正面": [
-            "stayed on eggs", "fast drying", "vibrant on shells", 
-            "didn't smudge", "worked on plastic eggs", "easy to decorate"
-        ],
-        "负面": [
-            "smudged on shells", "wiped right off", "too watery", 
-            "stained fingers", "not permanent", "runs on plastic"
+        "负面": [ "arrived late",  "not for holiday", "expensive for one day", "colors too dark", 
+        "box damaged", "missed christmas", "cheap looking", "poor packaging", "not festive"
         ]
     }
  }    
