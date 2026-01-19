@@ -996,7 +996,7 @@ if uploaded_file:
         top10_non_kid_asins = [
             '',  # 请替换为实际的ASIN
             'B0BG7118BK',
-            'B01GRF7NRY',
+            'B0C4NV26V8',
             'B073TW8QHV',
             'B07NRB5G3Q',
             'B07RSQXSGY',
