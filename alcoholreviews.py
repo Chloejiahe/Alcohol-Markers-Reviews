@@ -995,15 +995,16 @@ if uploaded_file:
         # top10产品
         top10_non_kid_asins = [
             '',  # 请替换为实际的ASIN
-            'B0BG7118BK',
-            'B0C4NV26V8',
-            'B073TW8QHV',
+            'B07ZYFXLZ6',
             'B07NRB5G3Q',
-            'B07RSQXSGY',
             'B07VK1G863',
-            'B0BW87BYSN',
-            'B0C8HP7PF1',
-            'B0D7YTZNRF'
+            'B01GRF7NRY',
+            'B0D9B948GX',
+            'B08P4J7X8T',
+            'B0DJY2F84V',
+            'B09P7WS4P7',
+            'B08YDDCBDZ',
+            'B0D9GMMKHT'
         ]
 
         # 简单调出数据
